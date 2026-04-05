@@ -10,7 +10,6 @@ import math
 import numpy as np
 import pandas as pd
 from numba import njit
-from dataclasses import dataclass
 
 from support.concepts import DateRange
 from support.finance import Concepts
@@ -18,7 +17,7 @@ from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["VolatilityCalculator", "VolatilityHyperparams"]
+__all__ = ["VolatilityCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -168,36 +167,18 @@ def implied(y, x, k, τ, i, r, /, low, high, tol, iters):
 
 @njit(cache=True)
 def calculation(y, x, k, τ, i, r, /, low, high, tol, iters):
-    σ = np.empty(len(y), dtype=np.float64)  # Implied Volatility
+    σ = np.empty(len(y), dtype=np.float64)
     for idx in range(len(y)):
-        σ[idx] = implied(y[idx], x[idx], k[idx], τ[idx], i[idx], r, low=low, high=high, tol=tol, iters=iters)
+        σ[idx] = implied(y[idx], x[idx], k[idx], τ[idx], i[idx], r[idx], low=low, high=high, tol=tol, iters=iters)
     return σ
 
 
-@dataclass(frozen=True)
-class NumericHyperParam:
-    key: str; value: int | float
-
-    def __str__(self): return str(self.key)
-    def __int__(self): return int(self.value)
-    def __float__(self): return float(self.value)
-
-
-class VolatilityHyperparams:
-    LOW = NumericHyperParam("low", 1e-4)
-    HIGH = NumericHyperParam("high", 5.0)
-    TOTAL = NumericHyperParam("tol", 1e-10)
-    ITERS = NumericHyperParam("iters", 100)
-
-
 class VolatilityCalculator(Logging):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
-        hyperparams = [VolatilityHyperparams.LOW, VolatilityHyperparams.HIGH, VolatilityHyperparams.TOTAL, VolatilityHyperparams.ITERS]
-        hyperparams = {str(hyperparam): kwargs.get(str(hyperparam), float(hyperparam)) for hyperparam in hyperparams}
-        self.__hyperparams = hyperparams
+        self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    def __call__(self, options, *args, interest, **kwargs):
+    def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         y = options["median"].to_numpy(np.float64)
@@ -205,7 +186,8 @@ class VolatilityCalculator(Logging):
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        options["implied"] = calculation(y, x, k, τ, i, float(interest), **self.hyperparams)
+        r = options["interest"].to_numpy(np.float64)
+        options["implied"] = calculation(y, x, k, τ, i, r, **self.hyperparams)
         self.alert(options)
         return options
 

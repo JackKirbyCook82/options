@@ -132,14 +132,14 @@ def calculation(x, k, τ, σ, i, r):
     Χ = np.empty(len(x), dtype=np.float64)  # Charm, Χ = d²y/dx*dτ
 
     for idx in range(len(x)):
-        Δ[idx] = delta(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
-        Γ[idx] = gamma(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
-        Θ[idx] = theta(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
-        Ρ[idx] = rho(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
-        V[idx] = vega(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
-        Φ[idx] = vomma(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
-        Ψ[idx] = vanna(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
-        Χ[idx] = charm(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
+        Δ[idx] = delta(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
+        Γ[idx] = gamma(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
+        Θ[idx] = theta(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
+        Ρ[idx] = rho(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
+        V[idx] = vega(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
+        Φ[idx] = vomma(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
+        Ψ[idx] = vanna(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
+        Χ[idx] = charm(x[idx], k[idx], τ[idx], σ[idx], i[idx], r[idx])
     return Δ, Γ, Θ, Ρ, V, Φ, Ψ, Χ
 
 
@@ -151,15 +151,16 @@ class GreekCalculator(Logging):
         variables = SimpleNamespace(inlet=inlet, outlet=outlet)
         self.__variables = variables
 
-    def __call__(self, options, *args, interest, **kwargs):
+    def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        x = options["underlying"].to_numpy(np.float64)  # Market Stock Price
-        k = options["strike"].to_numpy(np.float64)  # Option Strike
-        τ = options["tau"].to_numpy(np.float64)  # Option DTE
-        σ = options["implied"].to_numpy(np.float64)  # Implied Volatility
-        i = options["option"].apply(int).to_numpy(np.int8)  # Option Type
-        greeks = list(calculation(x, k, τ, σ, i, float(interest)))
+        x = options["underlying"].to_numpy(np.float64)
+        k = options["strike"].to_numpy(np.float64)
+        τ = options["tau"].to_numpy(np.float64)
+        σ = options["implied"].to_numpy(np.float64)
+        i = options["option"].apply(int).to_numpy(np.int8)
+        r = options["interest"].to_numpy(np.float64)
+        greeks = list(calculation(x, k, τ, σ, i, r))
         greeks = dict(zip(self.variables.outlet.values(), greeks))
         options = pd.concat([options,  pd.DataFrame(greeks)], axis=1)
         self.alert(options)

@@ -52,7 +52,7 @@ class SanityFilter(MarketFilter, variables=["sanity"]):
     asked = lambda ask: ask.notna() & (ask >= 0)
 
 
-class ViabilityFilter(MarketFilter, variables=["viability"]):
+class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"spread": 0.25, "size": 2}):
     viability = lambda liquid, supplied, demanded:  np.logical_and.reduce([liquid, supplied, demanded])
     liquid = lambda bid, ask, *, spread=0.25: (ask - bid) * 2 / (ask + bid) <= float(spread)
     supplied = lambda supply, *, size=2: supply >= int(size)
@@ -61,7 +61,6 @@ class ViabilityFilter(MarketFilter, variables=["viability"]):
 
 class MarketCalculator(Calculation, Logging):
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
-    discount = lambda tau, *, interest: np.exp(-tau * interest)
     intrinsic = lambda strike, underlying, option: (np.maximum((underlying - strike) * option.astype(int), 0) * option.astype(int))
     moneyness = lambda strike, underlying: strike / underlying
     mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
