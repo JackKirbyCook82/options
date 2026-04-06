@@ -27,9 +27,9 @@ class MarketFilter(Calculation, Logging, ABC):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        mask = self.calculate(options, *args, **kwargs)
+        mask = self.calculate(options, *args, **kwargs).squeeze()
         previous = len(options.index)
-        options = options.where(mask.squeeze())
+        options = options.where(mask)
         options = options.dropna(how="all", inplace=False)
         options = options.reset_index(drop=True, inplace=False)
         self.alert(options, int(previous), len(options))
@@ -44,25 +44,26 @@ class MarketFilter(Calculation, Logging, ABC):
 
 
 class SanityFilter(MarketFilter, variables=["sanity"]):
-    sanity = lambda realistic, supplied, demanded, bided, asked: np.logical_and.reduce([realistic, supplied, demanded, bided, asked])
+    sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
+    supplied = lambda supply, *, size: supply.notna() & (supply >= 1)
+    demanded = lambda demand, *, size: demand.notna() & (demand >= 1)
+    bided = lambda bid: bid.notna() & np.isfinite(bid) & (bid >= 0)
+    asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
-    supplied = lambda supply: supply.notna() & (supply >= 1)
-    demanded = lambda demand: demand.notna() & (demand >= 1)
-    bided = lambda bid: bid.notna() & (bid >= 0)
-    asked = lambda ask: ask.notna() & (ask >= 0)
 
 
-class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"spread": 0.25, "size": 2}):
-    viability = lambda liquid, supplied, demanded:  np.logical_and.reduce([liquid, supplied, demanded])
-    liquid = lambda bid, ask, *, spread=0.25: (ask - bid) * 2 / (ask + bid) <= float(spread)
-    supplied = lambda supply, *, size=2: supply >= int(size)
-    demanded = lambda demand, *, size=2: demand >= int(size)
+class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 2, "money": 0.10, "tight": 0.25}):
+    viability = lambda money, tight, supplied, demanded:  np.logical_and.reduce([money, tight, supplied, demanded])
+    money = lambda moneyness, /, money: moneyness >= float(money)
+    tight = lambda tightness, /, tight: tightness <= float(tight)
+    supplied = lambda supply, *, size: supply >= int(size)
+    demanded = lambda demand, *, size: demand >= int(size)
 
 
 class MarketCalculator(Calculation, Logging):
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
-    intrinsic = lambda strike, underlying, option: (np.maximum((underlying - strike) * option.astype(int), 0) * option.astype(int))
-    moneyness = lambda strike, underlying: strike / underlying
+    moneyness = lambda strike, underlying, option: np.log10(underlying / strike) * option.astype(int)
+    tightness = lambda bid, ask: (ask - bid) * 2 / (ask + bid)
     mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
     median = lambda bid, ask: (bid + ask) / 2
     spread = lambda bid, ask: ask - bid
@@ -70,8 +71,8 @@ class MarketCalculator(Calculation, Logging):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        calculated = self.calculate(options, *args, **kwargs)
-        options = pd.concat([options, calculated], axis=1)
+        market = self.calculate(options, *args, **kwargs)
+        options = pd.concat([options, market], axis=1)
         self.alert(options)
         return options
 

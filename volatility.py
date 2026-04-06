@@ -169,7 +169,7 @@ def implied(y, x, k, τ, i, r, /, low, high, tol, iters):
 def calculation(y, x, k, τ, i, r, /, low, high, tol, iters):
     σ = np.empty(len(y), dtype=np.float64)
     for idx in range(len(y)):
-        σ[idx] = implied(y[idx], x[idx], k[idx], τ[idx], i[idx], r[idx], low=low, high=high, tol=tol, iters=iters)
+        σ[idx] = implied(y[idx], x[idx], k[idx], τ[idx], i[idx], r, low=low, high=high, tol=tol, iters=iters)
     return σ
 
 
@@ -178,7 +178,7 @@ class VolatilityCalculator(Logging):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, *args, interest, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         y = options["median"].to_numpy(np.float64)
@@ -186,8 +186,7 @@ class VolatilityCalculator(Logging):
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        r = options["interest"].to_numpy(np.float64)
-        options["implied"] = calculation(y, x, k, τ, i, r, **self.hyperparams)
+        options["implied"] = calculation(y, x, k, τ, i, float(interest), **self.hyperparams)
         self.alert(options)
         return options
 

@@ -61,7 +61,7 @@ def blackscholes(x, k, τ, σ, i, r):
 
 @njit(cache=True)
 def calculation(x, k, τ, σ, i, r):
-    y = np.empty(len(x), dtype=np.float64)  # Black Scholes Valuation
+    y = np.empty(len(x), dtype=np.float64)
     for idx in range(len(x)):
         y[idx] = blackscholes(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
     return y
