@@ -45,8 +45,8 @@ class MarketFilter(Calculation, Logging, ABC):
 
 class SanityFilter(MarketFilter, variables=["sanity"]):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
-    supplied = lambda supply, *, size: supply.notna() & (supply >= 1)
-    demanded = lambda demand, *, size: demand.notna() & (demand >= 1)
+    supplied = lambda supply: supply.notna() & (supply >= 1)
+    demanded = lambda demand: demand.notna() & (demand >= 1)
     bided = lambda bid: bid.notna() & np.isfinite(bid) & (bid >= 0)
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
@@ -54,8 +54,8 @@ class SanityFilter(MarketFilter, variables=["sanity"]):
 
 class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 2, "money": 0.10, "tight": 0.25}):
     viability = lambda money, tight, supplied, demanded:  np.logical_and.reduce([money, tight, supplied, demanded])
-    money = lambda moneyness, /, money: moneyness >= float(money)
-    tight = lambda tightness, /, tight: tightness <= float(tight)
+    money = lambda moneyness, *, money: moneyness >= float(money) if money is not None else pd.Series(True, index=moneyness.index)
+    tight = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
     supplied = lambda supply, *, size: supply >= int(size)
     demanded = lambda demand, *, size: demand >= int(size)
 

@@ -24,10 +24,8 @@ __license__ = "MIT License"
 class ForwardCalculator(Logging):
     def __init__(self, *args, weights, spreads, **kwargs):
         assert callable(weights) and callable(spreads)
-        signature = inspect.signature(weights).parameters.items()
-        arguments = [variable for variable, details in signature if details.kind in (details.POSITIONAL_OR_KEYWORD, details.POSITIONAL_OR_KEYWORD)]
-        assert arguments == ["spread", "supply", "demand"]
-
+        assert self.arguments(weights) == ["spread", "supply", "demand"]
+        assert self.arguments(spreads) == ["spread", "underlying"]
         super().__init__(*args, **kwargs)
         self.__weights = weights
         self.__spreads = spreads
@@ -65,14 +63,17 @@ class ForwardCalculator(Logging):
 
     @staticmethod
     def selection(settlements, *args, **kwargs):
-        selection = settlements.pivot_table(index=["ticker", "expire", "strike", "underlying"], columns="option", values=["median", "spread", "supply", "demand"], sort=False).sort_index()
+        selection = settlements.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "spread", "supply", "demand", "underlying"], sort=False).sort_index()
+        if set(Concepts.Securities.Option) - set(selection.columns.get_level_values("option")): return pd.DataFrame(columns=selection.columns)
         validity = [selection[index].notna() for index in list(product(["median", "spread"], list(Concepts.Securities.Option)))]
         selection = selection[np.logical_and.reduce(validity)]
+        if bool(selection.empty): return pd.DataFrame(columns=selection.columns)
         difference = (selection["median", Concepts.Securities.Option.CALL] - selection["median", Concepts.Securities.Option.PUT]).rename("difference")
         spread = (selection["spread", Concepts.Securities.Option.CALL] + selection["spread", Concepts.Securities.Option.PUT]).rename("spread")
         supply = (selection["supply", Concepts.Securities.Option.CALL] + selection["supply", Concepts.Securities.Option.PUT]).rename("supply")
         demand = (selection["demand", Concepts.Securities.Option.CALL] + selection["demand", Concepts.Securities.Option.PUT]).rename("demand")
-        selection = pd.concat([difference, spread, supply, demand, selection["strike"], selection["underlying"]], axis=1)
+        underlying = (selection["underlying", Concepts.Securities.Option.CALL] + selection["underlying", Concepts.Securities.Option.PUT]).rename("underlying") / 2
+        selection = pd.concat([difference, spread, supply, demand, underlying], axis=1)
         return selection
 
     @staticmethod
@@ -81,6 +82,11 @@ class ForwardCalculator(Logging):
         (a, b), *_ = np.linalg.lstsq(xw, yw, rcond=None)
         ε = np.sqrt(np.average((y - (a + b * x)) ** 2, weights=w))
         return - a / b, - b, ε
+
+    @staticmethod
+    def arguments(function):
+        signature = inspect.signature(function).parameters.items()
+        return [variable for variable, details in signature if details.kind in (details.POSITIONAL_OR_KEYWORD, details.POSITIONAL_OR_KEYWORD)]
 
     @property
     def weights(self): return self.__weights
