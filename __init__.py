@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon Mar 23 2026
-@name:   Market Objects
+@name:   Option Objects
 @author: Jack Kirby Cook
 
 """
@@ -18,12 +18,12 @@ from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["SanityFilter", "ViabilityFilter", "MarketCalculator"]
+__all__ = ["SanityFilter", "ViabilityFilter", "MarketCalculator", "MoneyCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class MarketFilter(Calculation, Logging, ABC):
+class OptionFilter(Calculation, Logging, ABC):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
@@ -43,7 +43,7 @@ class MarketFilter(Calculation, Logging, ABC):
         self.console("Filtered", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {int(previous):.0f}|{int(post):.0f}]")
 
 
-class SanityFilter(MarketFilter, variables=["sanity"]):
+class SanityFilter(OptionFilter, variables=["sanity"]):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
     supplied = lambda supply: supply.notna() & (supply >= 1)
     demanded = lambda demand: demand.notna() & (demand >= 1)
@@ -52,27 +52,21 @@ class SanityFilter(MarketFilter, variables=["sanity"]):
     realistic = lambda bid, ask: ask > bid
 
 
-class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 2, "money": 0.10, "tight": 0.25}):
-    viability = lambda money, tight, supplied, demanded:  np.logical_and.reduce([money, tight, supplied, demanded])
-    money = lambda moneyness, *, money: moneyness >= float(money) if money is not None else pd.Series(True, index=moneyness.index)
-    tight = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
+class ViabilityFilter(OptionFilter, variables=["viability"], defaults={"size": 2, "money": 0.20, "tight": 0.20}):
+    viability = lambda moneyed, tightened, supplied, demanded:  np.logical_and.reduce([moneyed, tightened, supplied, demanded])
+    moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
+    tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
     supplied = lambda supply, *, size: supply >= int(size)
     demanded = lambda demand, *, size: demand >= int(size)
 
 
-class MarketCalculator(Calculation, Logging):
-    tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
-    moneyness = lambda strike, underlying, option: np.log10(underlying / strike) * option.astype(int)
-    tightness = lambda bid, ask: (ask - bid) * 2 / (ask + bid)
-    mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
-    median = lambda bid, ask: (bid + ask) / 2
-    spread = lambda bid, ask: ask - bid
-
+class OptionCalculator(Calculation, Logging, ABC):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         market = self.calculate(options, *args, **kwargs)
         options = pd.concat([options, market], axis=1)
+        options = options.reset_index(drop=True, inplace=False)
         self.alert(options)
         return options
 
@@ -84,6 +78,21 @@ class MarketCalculator(Calculation, Logging):
         self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
 
 
+class MarketCalculator(OptionCalculator):
+    tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
+    moneyness = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
+    tightness = lambda bid, ask, median: (ask - bid) / median
+    mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
+    median = lambda bid, ask: (bid + ask) / 2
+    spread = lambda bid, ask: ask - bid
+
+
+class MoneyCalculator(OptionCalculator):
+    mspt = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
+    mfwd = lambda forward, strike, option: np.log10(forward / strike) * option.astype(int)
+    zspt = lambda mspt, variance: mspt / np.sqrt(variance)
+    zfwd = lambda mfwd, variance: mfwd / np.sqrt(variance)
+    variance = lambda implied, tau: implied * implied * tau
 
 
 

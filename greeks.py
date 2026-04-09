@@ -146,7 +146,7 @@ def calculation(x, k, τ, σ, i, r):
 class GreekCalculator(Logging):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        inlet = ODict(x="underlying", k="strike", τ="tau", σ="volatility", i="option", r="interest")
+        inlet = ODict(x="spot", k="strike", τ="tau", σ="implied", i="option", r="interest")
         outlet = ODict(Δ="delta", Γ="gamma", Θ="theta", Ρ="rho", V="vega", Φ="vomma", Ψ="vanna", Χ="charm")
         variables = SimpleNamespace(inlet=inlet, outlet=outlet)
         self.__variables = variables
@@ -154,7 +154,7 @@ class GreekCalculator(Logging):
     def __call__(self, options, *args, interest, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        x = options["underlying"].to_numpy(np.float64)
+        x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         σ = options["implied"].to_numpy(np.float64)

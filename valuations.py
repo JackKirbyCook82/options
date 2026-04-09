@@ -71,12 +71,12 @@ class ValuationCalculator(Logging):
     def __call__(self, options, *args, interest, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        x = options["underlying"].to_numpy(np.float64)
+        x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        options["valuation"] = calculation(x, k, τ, σ, i, float(interest))
+        options["value"] = calculation(x, k, τ, σ, i, float(interest))
         self.alert(options)
         return options
 

@@ -182,7 +182,7 @@ class VolatilityCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         y = options["median"].to_numpy(np.float64)
-        x = options["underlying"].to_numpy(np.float64)
+        x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
