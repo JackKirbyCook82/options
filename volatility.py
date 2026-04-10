@@ -29,44 +29,41 @@ def normcdf(z): return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 def normpdf(z): return math.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi)
 
 @njit(cache=True, inline="always")
-def discount(r, τ): return math.exp(-r * τ)
+def discount(ρ, τ): return math.exp(-ρ * τ)
 
 @njit(cache=True, inline="always")
-def zitm(x, k, τ, σ, r):
+def zitm(x, k, τ, σ, r, q):
     if x <= 0.0 or k <= 0.0 or σ <= 0.0 or τ <= 0.0: return math.nan
     fτσ = σ * math.sqrt(τ)
-    return (math.log(x / k) + (r + 0.5 * σ * σ) * τ) / fτσ
+    return (math.log(x / k) + (r - q + 0.5 * σ * σ) * τ) / fτσ
 
 @njit(cache=True, inline="always")
-def zotm(x, k, τ, σ, r):
+def zotm(x, k, τ, σ, r, q):
     if x <= 0.0 or k <= 0.0 or σ <= 0.0 or τ <= 0.0: return math.nan
     fτσ = σ * math.sqrt(τ)
-    return zitm(x, k, τ, σ, r) - fτσ
+    return zitm(x, k, τ, σ, r, q) - fτσ
 
 @njit(cache=True, inline="always")
-def blackscholes(x, k, τ, σ, i, r):
+def blackscholes(x, k, τ, σ, i, r, q):
     if not valid(x, k, τ, i) or σ <= 0.0 or not math.isfinite(σ): return math.nan
-    zx = zitm(x, k, τ, σ, r)
+    zx = zitm(x, k, τ, σ, r, q)
     zk = zx - σ * math.sqrt(τ)
-    dcf = discount(r, τ)
-    return i * (x * normcdf(i * zx) - k * dcf * normcdf(i * zk))
+    return i * (x * discount(q, τ) * normcdf(i * zx) - k * discount(r, τ) * normcdf(i * zk))
 
 @njit(cache=True, inline="always")
-def error(y, x, k, τ, σ, i, r): return blackscholes(x, k, τ, σ, i, r) - y
+def error(y, x, k, τ, σ, i, r, q): return blackscholes(x, k, τ, σ, i, r, q) - y
 
 @njit(cache=True, inline="always")
-def intrinsic(x, k, τ, i, r):
-    dcf = discount(r, τ)
-    if i == +1: yτ = max(0.0, x - k * dcf)
-    elif i == -1: yτ = max(0.0, k * dcf - x)
+def intrinsic(x, k, τ, i, r, q):
+    if i == +1: yτ = max(0.0, x * discount(q, τ) - k * discount(r, τ))
+    elif i == -1: yτ = max(0.0, k * discount(r, τ) - x * discount(q, τ))
     return yτ
 
 @njit(cache=True, inline="always")
-def boundary(x, k, τ, i, r):
+def boundary(x, k, τ, i, r, q):
     assert i == +1 or i == -1
-    dcf = discount(r, τ)
-    if i == +1: yl = max(0.0, x - k * dcf); yh = x
-    elif i == -1: yl = max(0.0, k * dcf - x); yh = k * dcf
+    if i == +1: yl = max(0.0, x * discount(q, τ) - k * discount(r, τ)); yh = x * discount(q, τ)
+    elif i == -1: yl = max(0.0, k * discount(r, τ) - x * discount(q, τ)); yh = k * discount(r, τ)
     return yl, yh
 
 @njit(cache=True, inline="always")
@@ -77,11 +74,11 @@ def valid(x, k, τ, i):
     return positive and option and finite
 
 @njit(cache=True, inline="always")
-def vega(x, k, τ, σ, i, r):
+def vega(x, k, τ, σ, i, r, q):
     """dy/dσ"""
     if x <= 0.0 or k <= 0.0 or τ <= 0.0 or σ <= 0.0: return 0.0
-    zx = zitm(x, k, τ, σ, r)
-    return x * normpdf(zx) * math.sqrt(τ)
+    zx = zitm(x, k, τ, σ, r, q)
+    return x * discount(q, τ) * normpdf(zx) * math.sqrt(τ)
 
 @njit(cache=True, inline="always")
 def adaptive(x, k, τ):
@@ -90,23 +87,23 @@ def adaptive(x, k, τ):
     return min(math.sqrt((10.0 + 2.0 * xk) / τ), 20.0)
 
 @njit(cache=True, inline="always")
-def brenner(y, x, k, τ, i, r, /, low, high):
-    yτ = intrinsic(x, k, τ, i, r)
+def brenner(y, x, k, τ, i, r, q, /, low, high):
+    yτ = intrinsic(x, k, τ, i, r, q)
     dy = max(y - yτ, 1e-12)
-    x = max(x, 1e-12)
-    σ = math.sqrt(2.0 * math.pi / max(τ, 1e-12)) * dy / x
+    xq = max(x * discount(q, τ), 1e-12)
+    σ = math.sqrt(2.0 * math.pi / max(τ, 1e-12)) * dy / xq
     if not math.isfinite(σ): σ = 0.2
     if σ < low: σ = low
     if σ > high: σ = high
     return σ
 
 @njit(cache=True)
-def newton(y, x, k, τ, i, r, /, low, high, tol, iters):
-    σ = brenner(y, x, k, τ, i, r, low, high)
+def newton(y, x, k, τ, i, r, q, /, low, high, tol, iters):
+    σ = brenner(y, x, k, τ, i, r, q, low, high)
     for _ in range(iters):
-        err = error(y, x, k, τ, σ, i, r)
+        err = error(y, x, k, τ, σ, i, r, q)
         if abs(err) <= tol: return σ
-        dydσ = vega(x, k, τ, σ, i, r)
+        dydσ = vega(x, k, τ, σ, i, r, q)
         if not math.isfinite(dydσ) or dydσ <= 1e-12: return math.nan
         step = err / dydσ
         limit = 0.5 * max(σ, 0.10)
@@ -121,9 +118,9 @@ def newton(y, x, k, τ, i, r, /, low, high, tol, iters):
     return math.nan
 
 @njit(cache=True)
-def bisection(y, x, k, τ, i, r, /, low, high, tol, iters):
-    yl = error(y, x, k, τ, low, i, r)
-    yh = error(y, x, k, τ, high, i, r)
+def bisection(y, x, k, τ, i, r, q, /, low, high, tol, iters):
+    yl = error(y, x, k, τ, low, i, r, q)
+    yh = error(y, x, k, τ, high, i, r, q)
     if not math.isfinite(yl) or not math.isfinite(yh): return math.nan
     if yl == 0.0: return low
     if yh == 0.0: return high
@@ -132,7 +129,7 @@ def bisection(y, x, k, τ, i, r, /, low, high, tol, iters):
     fa, fb = yl, yh
     for _ in range(iters):
         m = 0.5 * (a + b)
-        fm = error(y, x, k, τ, m, i, r)
+        fm = error(y, x, k, τ, m, i, r, q)
         if not math.isfinite(fm): return math.nan
         if abs(fm) <= tol or (b - a) <= 1e-10: return m
         if fa * fm <= 0.0: b, fb = m, fm
@@ -140,36 +137,36 @@ def bisection(y, x, k, τ, i, r, /, low, high, tol, iters):
     return 0.5 * (a + b)
 
 @njit(cache=True)
-def fitting(y, x, k, τ, i, r, /, low, high, tol, iters):
+def fitting(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     assert i == 1 or i == -1
     σl, σh = low, high
     for _ in range(iters):
         σml = σl + (σh - σl) / 3.0
         σmh = σh - (σh - σl) / 3.0
-        yml = abs(error(y, x, k, τ, σml, i, r))
-        ymh = abs(error(y, x, k, τ, σmh, i, r))
+        yml = abs(error(y, x, k, τ, σml, i, r, q))
+        ymh = abs(error(y, x, k, τ, σmh, i, r, q))
         if yml < ymh: σh = σmh
         else: σl = σml
         if (σh - σl) < tol: break
     return 0.5 * (σl + σh)
 
 @njit(cache=True)
-def implied(y, x, k, τ, i, r, /, low, high, tol, iters):
+def implied(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     if not valid(x, k, τ, i) or low <= 0.0 or high <= low: return math.nan
-    yl, yh = boundary(x, k, τ, i, r)
+    yl, yh = boundary(x, k, τ, i, r, q)
     if y < yl - tol or y > yh + tol: return math.nan
     σh = min(high, adaptive(x, k, τ))
     if σh <= low: σh = high
-    σ = newton(y, x, k, τ, i, r, low=low, high=σh, tol=tol, iters=iters)
+    σ = newton(y, x, k, τ, i, r, q, low=low, high=σh, tol=tol, iters=iters)
     if math.isfinite(σ): return σ
-    return bisection(y, x, k, τ, i, r, low=low, high=σh, tol=tol, iters=max(100, iters))
+    return bisection(y, x, k, τ, i, r, q, low=low, high=σh, tol=tol, iters=max(100, iters))
 
 
 @njit(cache=True)
-def calculation(y, x, k, τ, i, r, /, low, high, tol, iters):
+def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     σ = np.empty(len(y), dtype=np.float64)
     for idx in range(len(y)):
-        σ[idx] = implied(y[idx], x[idx], k[idx], τ[idx], i[idx], r, low=low, high=high, tol=tol, iters=iters)
+        σ[idx] = implied(y[idx], x[idx], k[idx], τ[idx], i[idx], r, q, low=low, high=high, tol=tol, iters=iters)
     return σ
 
 
@@ -178,7 +175,7 @@ class VolatilityCalculator(Logging):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    def __call__(self, options, *args, interest, **kwargs):
+    def __call__(self, options, *args, interest, dividend=0.0, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         y = options["median"].to_numpy(np.float64)
@@ -186,7 +183,7 @@ class VolatilityCalculator(Logging):
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        options["implied"] = calculation(y, x, k, τ, i, float(interest), **self.hyperparams)
+        options["implied"] = calculation(y, x, k, τ, i, float(interest), float(dividend), **self.hyperparams)
         self.alert(options)
         return options
 
@@ -199,6 +196,3 @@ class VolatilityCalculator(Logging):
 
     @property
     def hyperparams(self): return self.__hyperparams
-
-
-

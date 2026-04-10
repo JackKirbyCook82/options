@@ -29,46 +29,45 @@ def normcdf(z): return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 def normpdf(z): return math.exp(-0.5 * z * z) / math.sqrt(2.0 * math.pi)
 
 @njit(cache=True, inline="always")
-def discount(r, τ): return math.exp(-r * τ)
+def discount(ρ, τ): return math.exp(-ρ * τ)
 
 @njit(cache=True, inline="always")
-def zitm(x, k, τ, σ, r):
+def zitm(x, k, τ, σ, r, q):
     if x <= 0.0 or k <= 0.0 or σ <= 0.0 or τ <= 0.0: return math.nan
     fτσ = σ * math.sqrt(τ)
-    return (math.log(x / k) + (r + 0.5 * σ * σ) * τ) / fτσ
+    return (math.log(x / k) + (r - q + 0.5 * σ * σ) * τ) / fτσ
 
 @njit(cache=True, inline="always")
-def zotm(x, k, τ, σ, r):
+def zotm(x, k, τ, σ, r, q):
     if x <= 0.0 or k <= 0.0 or σ <= 0.0 or τ <= 0.0: return math.nan
     fτσ = σ * math.sqrt(τ)
-    return zitm(x, k, τ, σ, r) - fτσ
+    return zitm(x, k, τ, σ, r, q) - fτσ
 
 @njit(cache=True, inline="always")
-def valid(x, k, τ, i):
+def valid(x, k, τ, i, r, q):
     positive = (x > 0.0 and k > 0.0 and τ > 0.0)
     option = (i == 1 or i == -1)
-    finite = (math.isfinite(x) and math.isfinite(k) and math.isfinite(τ))
+    finite = (math.isfinite(x) and math.isfinite(k) and math.isfinite(τ) and math.isfinite(r) and math.isfinite(q))
     return positive and option and finite
 
 @njit(cache=True, inline="always")
-def blackscholes(x, k, τ, σ, i, r):
-    if not valid(x, k, τ, i) or σ <= 0.0 or not math.isfinite(σ): return math.nan
-    zx = zitm(x, k, τ, σ, r)
+def blackscholes(x, k, τ, σ, i, r, q):
+    if not valid(x, k, τ, i, r, q) or σ <= 0.0 or not math.isfinite(σ): return math.nan
+    zx = zitm(x, k, τ, σ, r, q)
     zk = zx - σ * math.sqrt(τ)
-    dcf = discount(r, τ)
-    return i * (x * normcdf(i * zx) - k * dcf * normcdf(i * zk))
+    return i * (x * discount(q, τ) * normcdf(i * zx) - k * discount(r, τ) * normcdf(i * zk))
 
 
 @njit(cache=True)
-def calculation(x, k, τ, σ, i, r):
+def calculation(x, k, τ, σ, i, r, q):
     y = np.empty(len(x), dtype=np.float64)
     for idx in range(len(x)):
-        y[idx] = blackscholes(x[idx], k[idx], τ[idx], σ[idx], i[idx], r)
+        y[idx] = blackscholes(x[idx], k[idx], τ[idx], σ[idx], i[idx], r, q)
     return y
 
 
 class ValuationCalculator(Logging):
-    def __call__(self, options, *args, interest, **kwargs):
+    def __call__(self, options, *args, interest, dividend, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         x = options["spot"].to_numpy(np.float64)
@@ -76,7 +75,7 @@ class ValuationCalculator(Logging):
         τ = options["tau"].to_numpy(np.float64)
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        options["value"] = calculation(x, k, τ, σ, i, float(interest))
+        options["value"] = calculation(x, k, τ, σ, i, float(interest), float(dividend))
         self.alert(options)
         return options
 
@@ -86,6 +85,3 @@ class ValuationCalculator(Logging):
         expires = DateRange.create(list(dataframe["expire"].unique()))
         expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
         self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
-
-
-
