@@ -18,7 +18,7 @@ from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["SanityFilter", "ViabilityFilter", "MarketCalculator", "MoneyCalculator"]
+__all__ = ["SanityFilter", "ViabilityFilter", "OptionCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -61,12 +61,18 @@ class ViabilityFilter(OptionFilter, variables=["viability"], defaults={"size": 2
 
 
 class OptionCalculator(Calculation, Logging, ABC):
+    tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
+    moneyness = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
+    tightness = lambda bid, ask, median: (ask - bid) / median
+    mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
+    median = lambda bid, ask: (bid + ask) / 2
+    spread = lambda bid, ask: ask - bid
+
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        market = self.calculate(options, *args, **kwargs)
-        options = pd.concat([options, market], axis=1)
-        options = options.reset_index(drop=True, inplace=False)
+        calculated = self.calculate(options, *args, **kwargs)
+        options = pd.concat([options, calculated], axis=1)
         self.alert(options)
         return options
 
@@ -78,21 +84,7 @@ class OptionCalculator(Calculation, Logging, ABC):
         self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
 
 
-class MarketCalculator(OptionCalculator):
-    tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
-    moneyness = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
-    tightness = lambda bid, ask, median: (ask - bid) / median
-    mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
-    median = lambda bid, ask: (bid + ask) / 2
-    spread = lambda bid, ask: ask - bid
 
-
-class MoneyCalculator(OptionCalculator):
-    mspt = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
-    mfwd = lambda forward, strike, option: np.log10(forward / strike) * option.astype(int)
-    zspt = lambda mspt, variance: mspt / np.sqrt(variance)
-    zfwd = lambda mfwd, variance: mfwd / np.sqrt(variance)
-    variance = lambda implied, tau: implied * implied * tau
 
 
 

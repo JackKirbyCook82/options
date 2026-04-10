@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from itertools import product
 
+from support.concepts import DateRange
 from support.finance import Concepts
 from support.mixins import Logging
 
@@ -37,14 +38,14 @@ class ForwardCalculator(Logging):
         forward = pd.concat(list(forward), axis=0)
         forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
         forward = forward.reset_index(drop=True, inplace=False)
+        self.alert(forward)
         return forward
 
     def calculator(self, options, *args, **kwargs):
-        for (ticker, expire), settlements in options.groupby(["ticker", "expire"]):
+        for _, settlements in options.groupby(["ticker", "expire"]):
             selection = self.selection(settlements, *args, **kwargs)
             forward = self.calculate(selection, *args, **kwargs)
             forward = settlements.assign(**forward)
-            self.alert(ticker, expire, len(forward), len(selection))
             yield forward
 
     def calculate(self, selection, *args, **kwargs):
@@ -58,9 +59,12 @@ class ForwardCalculator(Logging):
         forward, discount, error = self.regression(difference, strikes, weights)
         return dict(forward=forward, discount=discount, error=error)
 
-    def alert(self, ticker, expire, size, sample):
+    def alert(self, dataframe):
         instrument = str(Concepts.Securities.Instrument.OPTION).title()
-        self.console("Calculated", f"{str(instrument)}[{str(ticker)}, {expire.strftime('%Y%m%d')}, {int(size):.0f}|{int(sample):.0f}]")
+        tickers = "|".join(list(dataframe["ticker"].unique()))
+        expires = DateRange.create(list(dataframe["expire"].unique()))
+        expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
+        self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
 
     @staticmethod
     def selection(settlements, *args, **kwargs):
