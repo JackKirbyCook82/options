@@ -59,13 +59,14 @@ class MarketCalculator(Equations, Alerting):
     median = lambda bid, ask: (bid + ask) / 2
     spread = lambda bid, ask: ask - bid
 
-    def __call__(self, markets, *args, **kwargs):
-        assert isinstance(markets, pd.DataFrame)
-        if bool(markets.empty): return markets
-        options = self.equate(markets, *args, **kwargs)
-        self.alert(markets, instrument=Concepts.Securities.Instrument.OPTION)
-        return options
-
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        if bool(options.empty): return options
+        contract = options[["ticker", "expire", "strike", "option"]]
+        markets = self.equate(options, *args, **kwargs)
+        markets = pd.concat([contract, markets], axis=1)
+        self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
+        return markets
 
 
 

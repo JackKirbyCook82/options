@@ -156,8 +156,11 @@ class GreekCalculator(Alerting):
         τ = options["tau"].to_numpy(np.float64)
         σ = options["implied"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
+        contract = options[["ticker", "expire", "strike", "option"]]
         greeks = list(calculation(x, k, τ, σ, i, float(interest), float(dividends)))
         greeks = dict(zip(self.variables.outlet.values(), greeks))
+        greeks = pd.DataFrame(greeks)
+        greeks = pd.concat([contract, greeks], axis=1)
         self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
         return greeks
 
