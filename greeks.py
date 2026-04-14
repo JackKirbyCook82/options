@@ -150,7 +150,7 @@ class GreekCalculator(Logging):
         variables = SimpleNamespace(inlet=inlet, outlet=outlet)
         self.__variables = variables
 
-    def __call__(self, options, *args, interest, dividend, **kwargs):
+    def __call__(self, options, *args, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         x = options["spot"].to_numpy(np.float64)
@@ -158,7 +158,7 @@ class GreekCalculator(Logging):
         τ = options["tau"].to_numpy(np.float64)
         σ = options["implied"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        greeks = list(calculation(x, k, τ, σ, i, float(interest), float(dividend)))
+        greeks = list(calculation(x, k, τ, σ, i, float(interest), float(dividends)))
         greeks = dict(zip(self.variables.outlet.values(), greeks))
         options = pd.concat([options,  pd.DataFrame(greeks)], axis=1)
         self.alert(options)

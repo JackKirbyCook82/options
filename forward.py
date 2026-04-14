@@ -23,8 +23,7 @@ __license__ = "MIT License"
 
 
 class ForwardError(Exception): pass
-class PrimaryForwardError(ForwardError): pass
-class SecondaryForwardError(ForwardError): pass
+class ForwardSampleError(ForwardError): pass
 
 
 class ForwardCalculator(Logging):
@@ -47,14 +46,33 @@ class ForwardCalculator(Logging):
         self.alert(forward)
         return forward
 
-    def calculator(self, options, *args, **kwargs):
+    def calculator(self, options, *args, interest, dividends, **kwargs):
         for _, options in options.groupby(["ticker", "expire"]):
-            try: options = self.primary(options, *args, **kwargs)
-            except PrimaryForwardError:
-                try: options = self.secondary(options, *args, **kwargs)
-                except SecondaryForwardError:
-                    options = self.tertiary(options, *args, **kwargs)
-            yield options
+            spot = options["spot"].dropna(inplace=False).to_numpy()
+            tau = options["tau"].dropna(inplace=False).to_numpy()
+            assert (tau[0] == tau).all() and (spot[0] == spot).all()
+            try:
+                samples = self.samples(options, *args, **kwargs)
+                spreads = self.spreads(samples["spread"], spot[0]).squeeze()
+                samples = samples.where(spreads).dropna(how="all", inplace=False)
+                weights = self.weights(samples["supply"], samples["demand"], samples["spread"])
+                if len(samples) < self.samplesize:
+                    discount = np.exp(tau[0] * (interest - dividends))
+                    forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
+                    forward = np.average(forwards, weights=weights)
+                    options = options.assign(forward=forward, discount=discount, error=np.NaN)
+                    yield options
+                else:
+                    difference = samples["difference"].to_numpy()
+                    strikes = samples["strike"].to_numpy()
+                    forward, discount, error = self.regression(difference, strikes, weights.to_numpy())
+                    options = options.assign(forward=forward, discount=discount, error=error)
+                    yield options
+            except ForwardSampleError:
+                discount = np.exp(tau[0] * (interest - dividends))
+                forward = spot[0] * discount
+                options = options.assign(forward=forward, discount=discount, error=np.NaN)
+                yield options
 
     def alert(self, dataframe):
         instrument = str(Concepts.Securities.Instrument.OPTION).title()
@@ -63,47 +81,19 @@ class ForwardCalculator(Logging):
         expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
         self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
 
-    def primary(self, options, *args, **kwargs):
-        samples = self.samples(options, *args, **kwargs)
-        if len(samples) <= self.samplesize: raise PrimaryForwardError()
-        samples = samples.reset_index(drop=False, inplace=False).drop(columns=["ticker", "expire"], inplace=False)
-        spreads = self.spreads(samples["spread"], samples["spot"]).squeeze()
-        samples = samples.where(spreads).dropna(how="all", inplace=False)
-        weights = self.weights(samples["supply"], samples["demand"], samples["spread"]).to_numpy()
-        difference = samples["difference"].to_numpy()
-        strikes = samples["strike"].to_numpy()
-        forward, discount, error = self.regression(difference, strikes, weights)
-        options = options.assign(forward=forward, discount=discount, error=error)
-        return options
-
-    @staticmethod
-    def secondary(options, *args, interest=np.NaN, dividends=np.NaN, **kwargs):
-        if interest is np.NaN or dividends is np.NaN: raise SecondaryForwardError()
-        rate = interest - dividends
-        discount = np.exp(rate * options["tau"])
-        forward = options["spot"] * discount
-        options = pd.concat([options, forward, discount], axis=1)
-        options["error"] = np.NaN
-        return options
-
-    @staticmethod
-    def tertiary(options, *args, **kwargs):
-        options = options.assign(forward=np.NaN, discount=np.NaN, error=np.NaN)
-        return options
-
     @staticmethod
     def samples(options, *args, **kwargs):
-        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "spread", "supply", "demand", "spot"], sort=False).sort_index()
-        if set(Concepts.Securities.Option) - set(samples.columns.get_level_values("option")): return pd.DataFrame(columns=samples.columns)
+        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "spread", "supply", "demand"], sort=False).sort_index()
+        if set(Concepts.Securities.Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
         validity = [samples[index].notna() for index in list(product(["median", "spread"], list(Concepts.Securities.Option)))]
         samples = samples[np.logical_and.reduce(validity)]
-        if bool(samples.empty): return pd.DataFrame(columns=samples.columns)
         difference = (samples["median", Concepts.Securities.Option.CALL] - samples["median", Concepts.Securities.Option.PUT]).rename("difference")
         spread = (samples["spread", Concepts.Securities.Option.CALL] + samples["spread", Concepts.Securities.Option.PUT]).rename("spread")
         supply = (samples["supply", Concepts.Securities.Option.CALL] + samples["supply", Concepts.Securities.Option.PUT]).rename("supply")
         demand = (samples["demand", Concepts.Securities.Option.CALL] + samples["demand", Concepts.Securities.Option.PUT]).rename("demand")
-        spot = (samples["spot", Concepts.Securities.Option.CALL] + samples["spot", Concepts.Securities.Option.PUT]).rename("spot") / 2
-        samples = pd.concat([difference, spread, supply, demand, spot], axis=1)
+        strike = samples.index.get_level_values("strike").to_series(index=samples.index)
+        samples = pd.concat([strike, difference, spread, supply, demand], axis=1)
+        samples = samples.reset_index(drop=True, inplace=False)
         return samples
 
     @staticmethod
@@ -124,5 +114,6 @@ class ForwardCalculator(Logging):
     def weights(self): return self.__weights
     @property
     def spreads(self): return self.__spreads
+
 
 
