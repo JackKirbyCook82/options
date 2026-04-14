@@ -11,9 +11,10 @@ import pandas as pd
 from abc import ABC
 from datetime import date as Date
 
-from support.calculations import Calculation
+from support.equations import Equations
 from support.concepts import DateRange
 from support.finance import Concepts
+from support.filters import Filter
 from support.mixins import Logging
 
 __version__ = "1.0.0"
@@ -23,16 +24,14 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class OptionFilter(Calculation, Logging, ABC):
+class OptionFilter(Filter, Logging, ABC):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        mask = self.calculate(options, *args, **kwargs).squeeze()
         previous = len(options.index)
-        options = options.where(mask)
-        options = options.dropna(how="all", inplace=False)
-        options = options.reset_index(drop=True, inplace=False)
-        self.alert(options, int(previous), len(options))
+        options = self.filter(options, *args, **kwargs)
+        post = len(options.index)
+        self.alert(options, int(previous), int(post))
         return options
 
     def alert(self, dataframe, previous, post):
@@ -60,7 +59,7 @@ class ViabilityFilter(OptionFilter, variables=["viability"], defaults={"size": 2
     demanded = lambda demand, *, size: demand >= int(size)
 
 
-class OptionCalculator(Calculation, Logging, ABC):
+class OptionCalculator(Equations, Logging):
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     moneyness = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
     tightness = lambda bid, ask, median: (ask - bid) / median
@@ -71,7 +70,7 @@ class OptionCalculator(Calculation, Logging, ABC):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        calculated = self.calculate(options, *args, **kwargs)
+        calculated = self.equate(options, *args, **kwargs)
         options = pd.concat([options, calculated], axis=1)
         self.alert(options)
         return options
