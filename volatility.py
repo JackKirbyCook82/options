@@ -11,9 +11,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from support.concepts import DateRange
-from support.finance import Concepts
-from support.mixins import Logging
+from support.finance import Concepts, Alerting
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -170,7 +168,7 @@ def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     return σ
 
 
-class VolatilityCalculator(Logging):
+class VolatilityCalculator(Alerting):
     def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
@@ -183,16 +181,10 @@ class VolatilityCalculator(Logging):
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        options["implied"] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
-        self.alert(options)
-        return options
-
-    def alert(self, dataframe):
-        instrument = str(Concepts.Securities.Instrument.OPTION).title()
-        tickers = "|".join(list(dataframe["ticker"].unique()))
-        expires = DateRange.create(list(dataframe["expire"].unique()))
-        expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
-        self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
+        volatility = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
+        volatility = pd.Series(volatility, name="implied")
+        self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
+        return volatility
 
     @property
     def hyperparams(self): return self.__hyperparams

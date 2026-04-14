@@ -11,9 +11,7 @@ import numpy as np
 import pandas as pd
 from itertools import product
 
-from support.concepts import DateRange
-from support.finance import Concepts
-from support.mixins import Logging
+from support.finance import Concepts, Alerting
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -26,7 +24,7 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Logging):
+class ForwardCalculator(Alerting):
     def __init__(self, *args, weights, spreads, samplesize=5, **kwargs):
         assert callable(weights) and callable(spreads)
         assert self.arguments(weights) == ["spread", "supply", "demand"]
@@ -43,7 +41,7 @@ class ForwardCalculator(Logging):
         forward = pd.concat(list(forward), axis=0)
         forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
         forward = forward.reset_index(drop=True, inplace=False)
-        self.alert(forward)
+        self.alert(forward, instrument=Concepts.Securities.Instrument.OPTION)
         return forward
 
     def calculator(self, options, *args, interest, dividends, **kwargs):
@@ -73,13 +71,6 @@ class ForwardCalculator(Logging):
                 forward = spot[0] * discount
                 options = options.assign(forward=forward, discount=discount, error=np.NaN)
                 yield options
-
-    def alert(self, dataframe):
-        instrument = str(Concepts.Securities.Instrument.OPTION).title()
-        tickers = "|".join(list(dataframe["ticker"].unique()))
-        expires = DateRange.create(list(dataframe["expire"].unique()))
-        expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
-        self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
 
     @staticmethod
     def samples(options, *args, **kwargs):

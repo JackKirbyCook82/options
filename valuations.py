@@ -11,9 +11,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from support.concepts import DateRange
-from support.finance import Concepts
-from support.mixins import Logging
+from support.finance import Concepts, Alerting
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -66,7 +64,7 @@ def calculation(x, k, τ, σ, i, r, q):
     return y
 
 
-class ValuationCalculator(Logging):
+class ValuationCalculator(Alerting):
     def __call__(self, options, *args, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
@@ -75,13 +73,10 @@ class ValuationCalculator(Logging):
         τ = options["tau"].to_numpy(np.float64)
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        options["value"] = calculation(x, k, τ, σ, i, float(interest), float(dividends))
-        self.alert(options)
-        return options
+        valuations = calculation(x, k, τ, σ, i, float(interest), float(dividends))
+        valuations = pd.Series(valuations, name="blackscholes")
+        self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
+        return valuations
 
-    def alert(self, dataframe):
-        instrument = str(Concepts.Securities.Instrument.OPTION).title()
-        tickers = "|".join(list(dataframe["ticker"].unique()))
-        expires = DateRange.create(list(dataframe["expire"].unique()))
-        expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
-        self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
+
+

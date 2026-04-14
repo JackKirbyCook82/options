@@ -13,9 +13,7 @@ from numba import njit
 from types import SimpleNamespace
 from collections import OrderedDict as ODict
 
-from support.concepts import DateRange
-from support.finance import Concepts
-from support.mixins import Logging
+from support.finance import Concepts, Alerting
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -142,7 +140,7 @@ def calculation(x, k, τ, σ, i, r, q):
     return Δ, Γ, Θ, Ρ, V, Φ, Ψ, Χ
 
 
-class GreekCalculator(Logging):
+class GreekCalculator(Alerting):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         inlet = ODict(x="spot", k="strike", τ="tau", σ="implied", i="option", r="interest", q="dividend")
@@ -160,16 +158,8 @@ class GreekCalculator(Logging):
         i = options["option"].apply(int).to_numpy(np.int8)
         greeks = list(calculation(x, k, τ, σ, i, float(interest), float(dividends)))
         greeks = dict(zip(self.variables.outlet.values(), greeks))
-        options = pd.concat([options,  pd.DataFrame(greeks)], axis=1)
-        self.alert(options)
-        return options
-
-    def alert(self, dataframe):
-        instrument = str(Concepts.Securities.Instrument.OPTION).title()
-        tickers = "|".join(list(dataframe["ticker"].unique()))
-        expires = DateRange.create(list(dataframe["expire"].unique()))
-        expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
-        self.console("Calculated", f"{str(instrument)}[{str(tickers)}, {str(expires)}, {len(dataframe):.0f}]")
+        self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
+        return greeks
 
     @property
     def variables(self): return self.__variables
