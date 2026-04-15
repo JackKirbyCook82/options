@@ -13,7 +13,7 @@ from datetime import date as Date
 
 from support.finance import Concepts, Alerting
 from support.equations import Equations
-from support.filters import Filter
+from support.calculations import Filter
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -62,9 +62,8 @@ class MarketCalculator(Equations, Alerting):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        contract = options[["ticker", "expire", "strike", "option"]]
-        markets = self.equate(options, *args, **kwargs)
-        markets = pd.concat([contract, markets], axis=1)
+        markets = self.execute(options, *args, **kwargs)
+        markets = pd.concat([options, markets], axis=1)
         self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
         return markets
 

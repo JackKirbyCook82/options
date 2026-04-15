@@ -12,6 +12,7 @@ import pandas as pd
 from itertools import product
 
 from support.finance import Concepts, Alerting
+from support.calculations import Generator
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -24,7 +25,7 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Alerting):
+class ForwardCalculator(Generator, Alerting):
     def __init__(self, *args, weights, spreads, samplesize=5, **kwargs):
         assert callable(weights) and callable(spreads)
         assert self.arguments(weights) == ["spread", "supply", "demand"]
@@ -37,17 +38,17 @@ class ForwardCalculator(Alerting):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        forward = self.calculator(options, *args, **kwargs)
-        forward = pd.concat(list(forward), axis=0)
+        forward = self.generator(options, *args, **kwargs)
         forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
         forward = forward.reset_index(drop=True, inplace=False)
         self.alert(forward, instrument=Concepts.Securities.Instrument.OPTION)
         return forward
 
-    def calculator(self, options, *args, interest, dividends, **kwargs):
-        for _, options in options.groupby(["ticker", "expire"]):
+    def generator(self, options, *args, **kwargs):
+        for (ticker, expire), options in options.groupby(["ticker", "expire"]):
             spot = options["spot"].dropna(inplace=False).to_numpy()
             tau = options["tau"].dropna(inplace=False).to_numpy()
+            constants = dict(spot=spot, tau=tau)
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
                 samples = self.samples(options, *args, **kwargs)
@@ -55,22 +56,37 @@ class ForwardCalculator(Alerting):
                 samples = samples.where(spreads).dropna(how="all", inplace=False)
                 weights = self.weights(samples["supply"], samples["demand"], samples["spread"])
                 if len(samples) < self.samplesize:
-                    discount = np.exp(tau[0] * (interest - dividends))
-                    forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
-                    forward = np.average(forwards, weights=weights)
-                    options = options.assign(forward=forward, discount=discount, error=np.NaN)
+                    forwards = self.primary(samples, weights, *args, **constants, **kwargs)
+                    options = options.assign(**forwards)
                     yield options
                 else:
-                    difference = samples["difference"].to_numpy()
-                    strikes = samples["strike"].to_numpy()
-                    forward, discount, error = self.regression(difference, strikes, weights.to_numpy())
-                    options = options.assign(forward=forward, discount=discount, error=error)
+                    forwards = self.secondary(samples, weights, *args, **constants, **kwargs)
+                    options = options.assign(**forwards)
                     yield options
             except ForwardSampleError:
-                discount = np.exp(tau[0] * (interest - dividends))
-                forward = spot[0] * discount
-                options = options.assign(forward=forward, discount=discount, error=np.NaN)
+                forwards = self.tertiary(*args, **constants, **kwargs)
+                options = options.assign(**forwards)
                 yield options
+
+    def primary(self, samples, weights, *args, **kwargs):
+        difference = samples["difference"].to_numpy()
+        strikes = samples["strike"].to_numpy()
+        weights = weights.to_numpy()
+        forward, discount, error = self.regression(difference, strikes, weights)
+        return dict(forward=forward, discount=discount, error=error)
+
+    @staticmethod
+    def secondary(samples, weights, *args, tau, interest, dividends, **kwargs):
+        discount = np.exp(tau * (interest - dividends))
+        forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
+        forward = np.average(forwards, weights=weights)
+        return dict(forward=forward, discount=discount, error=np.NaN)
+
+    @staticmethod
+    def tertiary(*args, spot, tau, interest, dividends, **kwargs):
+        discount = np.exp(tau[0] * (interest - dividends))
+        forward = spot[0] * discount
+        return dict(forward=forward, discount=discount, error=np.NaN)
 
     @staticmethod
     def samples(options, *args, **kwargs):

@@ -181,10 +181,9 @@ class VolatilityCalculator(Alerting):
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        contract = options[["ticker", "expire", "strike", "option"]]
         volatility = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         volatility = pd.Series(volatility, name="implied")
-        volatility = pd.concat([contract, volatility], axis=1)
+        volatility = pd.concat([options, volatility], axis=1)
         self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
         return volatility
 

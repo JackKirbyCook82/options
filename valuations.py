@@ -73,10 +73,9 @@ class ValuationCalculator(Alerting):
         τ = options["tau"].to_numpy(np.float64)
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        contract = options[["ticker", "expire", "strike", "option"]]
         valuation = calculation(x, k, τ, σ, i, float(interest), float(dividends))
         valuation = pd.Series(valuation, name="blackscholes")
-        valuation = pd.concat([contract, valuation], axis=1)
+        valuation = pd.concat([options, valuation], axis=1)
         self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
         return valuation
 

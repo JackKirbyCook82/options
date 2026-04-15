@@ -28,9 +28,8 @@ class SurfaceCalculator(Equations, Alerting):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        contract = options[["ticker", "expire", "strike", "option"]]
-        surface = self.equate(options, *args, **kwargs)
-        surface = pd.concat([contract, surface], axis=1)
+        surface = self.execute(options, *args, **kwargs)
+        surface = pd.concat([options, surface], axis=1)
         self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
         return surface
 

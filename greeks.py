@@ -10,8 +10,6 @@ import math
 import numpy as np
 import pandas as pd
 from numba import njit
-from types import SimpleNamespace
-from collections import OrderedDict as ODict
 
 from support.finance import Concepts, Alerting
 
@@ -141,31 +139,20 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekCalculator(Alerting):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        inlet = ODict(x="spot", k="strike", τ="tau", σ="implied", i="option", r="interest", q="dividend")
-        outlet = ODict(Δ="delta", Γ="gamma", Θ="theta", Ρ="rho", V="vega", Φ="vomma", Ψ="vanna", Χ="charm")
-        variables = SimpleNamespace(inlet=inlet, outlet=outlet)
-        self.__variables = variables
-
     def __call__(self, options, *args, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        x = options["spot"].to_numpy(np.float64)
-        k = options["strike"].to_numpy(np.float64)
-        τ = options["tau"].to_numpy(np.float64)
-        σ = options["implied"].to_numpy(np.float64)
-        i = options["option"].apply(int).to_numpy(np.int8)
-        contract = options[["ticker", "expire", "strike", "option"]]
-        greeks = list(calculation(x, k, τ, σ, i, float(interest), float(dividends)))
-        greeks = dict(zip(self.variables.outlet.values(), greeks))
+        spot = options["spot"].to_numpy(np.float64)
+        strike = options["strike"].to_numpy(np.float64)
+        tau = options["tau"].to_numpy(np.float64)
+        implied = options["implied"].to_numpy(np.float64)
+        option = options["option"].apply(int).to_numpy(np.int8)
+        greeks = list(calculation(spot, strike, tau, implied, option, float(interest), float(dividends)))
+        greeks = dict(zip(["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"], greeks))
         greeks = pd.DataFrame(greeks)
-        greeks = pd.concat([contract, greeks], axis=1)
+        greeks = pd.concat([options, greeks], axis=1)
         self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
         return greeks
-
-    @property
-    def variables(self): return self.__variables
 
 
 
