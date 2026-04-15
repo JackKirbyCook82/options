@@ -184,7 +184,7 @@ class VolatilityCalculator(Alerting):
         volatility = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         volatility = pd.Series(volatility, name="implied")
         volatility = pd.concat([options, volatility], axis=1)
-        self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
+        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return volatility
 
     @property

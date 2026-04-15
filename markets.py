@@ -30,7 +30,7 @@ class MarketFilter(Filter, Alerting, ABC):
         markets = self.filter(markets, *args, **kwargs)
         post = len(markets.index)
         sizes = dict(previous=previous, post=post)
-        self.alert(markets, instrument=Concepts.Securities.Instrument.OPTION, **sizes)
+        self.alert(markets, title="Filtered", instrument=Concepts.Securities.Instrument.OPTION, **sizes)
         return markets
 
 
@@ -64,7 +64,7 @@ class MarketCalculator(Equations, Alerting):
         if bool(options.empty): return options
         markets = self.execute(options, *args, **kwargs)
         markets = pd.concat([options, markets], axis=1)
-        self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
+        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return markets
 
 

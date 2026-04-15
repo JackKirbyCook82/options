@@ -38,17 +38,18 @@ class ForwardCalculator(Generator, Alerting):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        forward = self.generator(options, *args, **kwargs)
+        forward = self.generate(options, *args, **kwargs)
         forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
         forward = forward.reset_index(drop=True, inplace=False)
-        self.alert(forward, instrument=Concepts.Securities.Instrument.OPTION)
+        self.alert(forward, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return forward
 
     def generator(self, options, *args, **kwargs):
         for (ticker, expire), options in options.groupby(["ticker", "expire"]):
             spot = options["spot"].dropna(inplace=False).to_numpy()
             tau = options["tau"].dropna(inplace=False).to_numpy()
-            constants = dict(spot=spot, tau=tau)
+            instrument = str(Concepts.Securities.Instrument.OPTION).title()
+            constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
                 samples = self.samples(options, *args, **kwargs)
@@ -58,14 +59,17 @@ class ForwardCalculator(Generator, Alerting):
                 if len(samples) < self.samplesize:
                     forwards = self.primary(samples, weights, *args, **constants, **kwargs)
                     options = options.assign(**forwards)
+                    self.console("Regression", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                     yield options
                 else:
                     forwards = self.secondary(samples, weights, *args, **constants, **kwargs)
                     options = options.assign(**forwards)
+                    self.console("AverageCarry", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                     yield options
             except ForwardSampleError:
                 forwards = self.tertiary(*args, **constants, **kwargs)
                 options = options.assign(**forwards)
+                self.console("SingleCarry", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                 yield options
 
     def primary(self, samples, weights, *args, **kwargs):

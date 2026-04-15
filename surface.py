@@ -30,7 +30,7 @@ class SurfaceCalculator(Equations, Alerting):
         if bool(options.empty): return options
         surface = self.execute(options, *args, **kwargs)
         surface = pd.concat([options, surface], axis=1)
-        self.alert(options, instrument=Concepts.Securities.Instrument.OPTION)
+        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return surface
 
 
