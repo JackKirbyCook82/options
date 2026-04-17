@@ -37,7 +37,6 @@ class ForwardCalculator(Generator, Alerting):
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        if bool(options.empty): return options
         forward = self.generate(options, *args, **kwargs)
         forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
         forward = forward.reset_index(drop=True, inplace=False)
@@ -51,12 +50,12 @@ class ForwardCalculator(Generator, Alerting):
             instrument = str(Concepts.Securities.Instrument.OPTION).title()
             constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
-            samples = self.samples(options, *args, **kwargs)
-            spreads = self.spreads(samples["spread"], spot[0]).squeeze()
-            samples = samples.where(spreads).dropna(how="all", inplace=False)
             try:
+                samples = self.samples(options, *args, **kwargs)
+                spreads = self.spreads(samples["spread"], spot[0]).squeeze()
+                samples = samples.where(spreads).dropna(how="all", inplace=False)
                 weights = self.weights(samples["supply"], samples["demand"], samples["spread"])
-                if len(samples) < self.samplesize:
+                if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, *args, **constants, **kwargs)
                     options = options.assign(**forwards)
                     self.console("Regression", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
@@ -71,9 +70,6 @@ class ForwardCalculator(Generator, Alerting):
                 options = options.assign(**forwards)
                 self.console("SingleCarry", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                 yield options
-            except ZeroDivisionError as error:
-                with pd.option_context("display.max_rows", 100, "display.max_columns", 25): print(samples)
-                raise error
 
     def primary(self, samples, weights, *args, **kwargs):
         difference = samples["difference"].to_numpy()

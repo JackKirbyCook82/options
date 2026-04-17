@@ -67,7 +67,6 @@ def calculation(x, k, τ, σ, i, r, q):
 class ValuationCalculator(Alerting):
     def __call__(self, options, *args, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        if bool(options.empty): return options
         x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)

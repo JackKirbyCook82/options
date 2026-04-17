@@ -175,7 +175,6 @@ class VolatilityCalculator(Alerting):
 
     def __call__(self, options, *args, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        if bool(options.empty): return options
         y = options["median"].to_numpy(np.float64)
         x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)

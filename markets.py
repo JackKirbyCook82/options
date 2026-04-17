@@ -61,7 +61,6 @@ class MarketCalculator(Equations, Alerting):
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        if bool(options.empty): return options
         markets = self.execute(options, *args, **kwargs)
         markets = pd.concat([options, markets], axis=1)
         self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)

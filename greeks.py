@@ -141,7 +141,6 @@ def calculation(x, k, τ, σ, i, r, q):
 class GreekCalculator(Alerting):
     def __call__(self, options, *args, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        if bool(options.empty): return options
         spot = options["spot"].to_numpy(np.float64)
         strike = options["strike"].to_numpy(np.float64)
         tau = options["tau"].to_numpy(np.float64)
