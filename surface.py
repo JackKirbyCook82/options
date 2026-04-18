@@ -9,10 +9,8 @@ Created on Fri Apr 10 2026
 import numpy as np
 import pandas as pd
 from datetime import date as Date
-
-from numba.core.types import NumPyRandomGeneratorType
-from scipy.interpolate import CubicSpline
 from collections import namedtuple as ntuple
+from scipy.interpolate import CubicSpline, RectBivariateSpline
 
 from support.finance import Concepts, Alerting
 from support.equations import Equations
@@ -28,6 +26,7 @@ __license__ = "MIT License"
 
 Sample = ntuple("Sample", "dte mae tiv")
 Curve = ntuple("Spline", "dte spline bounds")
+Degree = ntuple("Degree", "taxis kaxis")
 
 
 class SurfaceCalculator(Equations, Alerting):
@@ -44,22 +43,24 @@ class SurfaceCalculator(Equations, Alerting):
 
 
 class SurfaceSpline(Logging):
-    def __init__(self, *args, samplesize=5, curvetype="natural", **kwargs):
+    def __init__(self, *args, samplesize=5, gridsize=100, curvetype="natural", degree=(3, 3), **kwargs):
         super().__init__(*args, **kwargs)
+        degree = (degree, degree) if isinstance(degree, int) else degree
+        assert isinstance(degree, tuple) and len(degree) == 2
         self.__samplesize = int(samplesize)
         self.__curvetype = str(curvetype)
+        self.__gridsize = int(gridsize)
+        self.__degree = Degree(*degree)
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         samples = self.samples(options, *args, **kwargs)
         curves = self.curves(samples, *args, **kwargs)
-
-
-    def curves(self, samples, *args, **kwargs):
-        splines = [CubicSpline(mae, tiv, bc_type=self.curvetype) for (dte, mae, tiv) in samples]
-        boundarys = [NumRange.create([mae[0], mae[-1]]) for (dte, mae, tiv) in samples]
-        curves = [Curve(sample.dte, spline, bounds) for (sample, spline, bounds) in zip(samples, splines, boundarys)]
-        return curves
+        taxis = self.taxis(curves, *args, **kwargs)
+        kaxis = self.kaxis(curves, *args, **kwargs)
+        waxis = np.array([curve.spline(kaxis) for index, curve in enumerate(curves)])
+        surface = RectBivariateSpline(taxis, kaxis, waxis, kx=self.degree.taxis, ky=self.degree.kaxis, s=0)
+        return surface
 
     def samples(self, options, *args, **kwargs):
         samples = options[["dte", "mae", "tiv"]].groupby(["dte", "mae"], as_index=False)["tiv"].mean()
@@ -71,10 +72,28 @@ class SurfaceSpline(Logging):
         samples = [Sample(dte, mae[order], tiv[order]) for dte, (mae, tiv, order) in samples.items()]
         return samples
 
+    def curves(self, samples, *args, **kwargs):
+        splines = [CubicSpline(mae, tiv, bc_type=self.curvetype) for (dte, mae, tiv) in samples]
+        boundarys = [NumRange.create([mae[0], mae[-1]]) for (dte, mae, tiv) in samples]
+        curves = [Curve(sample.dte, spline, bounds) for (sample, spline, bounds) in zip(samples, splines, boundarys)]
+        return curves
+
+    @staticmethod
+    def taxis(curves, *args, **kwargs): return np.array([curve.dte for curve in curves])
+    def kaxis(self, curves, *args, **kwargs):
+        left = max(curve.bounds.minimum for curve in curves)
+        right = min(curve.bounds.maximum for curve in curves)
+        assert left < right
+        return np.linspace(left, right, self.gridsize)
+
     @property
     def samplesize(self): return self.__samplesize
     @property
     def curvetype(self): return self.__curvetype
+    @property
+    def gridsize(self): return self.__gridsize
+    @property
+    def degree(self): return self.__degree
 
 
 
