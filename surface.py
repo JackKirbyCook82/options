@@ -26,7 +26,26 @@ __license__ = "MIT License"
 
 Sample = ntuple("Sample", "dte mae tiv")
 Curve = ntuple("Spline", "dte spline bounds")
-Degree = ntuple("Degree", "taxis kaxis")
+Domain = ntuple("Domain", "taxis kaxis")
+
+
+class Surface(object):
+    def __init__(self, taxis, kaxis, waxis, *args, degree, **kwargs):
+        assert isinstance(degree, Domain)
+        surface = RectBivariateSpline(taxis, kaxis, waxis, kx=degree.taxis, ky=degree.kaxis, s=0)
+        self.__domain = Domain(taxis, kaxis)
+        self.__surface = surface
+
+    @property
+    def boundarys(self):
+        taxis = NumRange.create([self.domain.taxis[0], self.domain.taxis[-1]])
+        kaxis = NumRange.create([self.domain.kaxis[0], self.domain.kaxis[-1]])
+        return Domain(taxis, kaxis)
+
+    @property
+    def surface(self): return self.__surface
+    @property
+    def domain(self): return self.__domain
 
 
 class SurfaceCalculator(Equations, Alerting):
@@ -37,12 +56,11 @@ class SurfaceCalculator(Equations, Alerting):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         surface = self.execute(options, *args, **kwargs)
-        surface = pd.concat([options, surface], axis=1)
         self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return surface
 
 
-class SurfaceSpline(Logging):
+class SurfaceCreator(Logging):
     def __init__(self, *args, samplesize=5, gridsize=100, curvetype="natural", degree=(3, 3), **kwargs):
         super().__init__(*args, **kwargs)
         degree = (degree, degree) if isinstance(degree, int) else degree
@@ -50,7 +68,7 @@ class SurfaceSpline(Logging):
         self.__samplesize = int(samplesize)
         self.__curvetype = str(curvetype)
         self.__gridsize = int(gridsize)
-        self.__degree = Degree(*degree)
+        self.__degree = Domain(*degree)
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
@@ -59,7 +77,7 @@ class SurfaceSpline(Logging):
         taxis = self.taxis(curves, *args, **kwargs)
         kaxis = self.kaxis(curves, *args, **kwargs)
         waxis = np.array([curve.spline(kaxis) for index, curve in enumerate(curves)])
-        surface = RectBivariateSpline(taxis, kaxis, waxis, kx=self.degree.taxis, ky=self.degree.kaxis, s=0)
+        surface = Surface(taxis, kaxis, waxis, degree=self.degree)
         return surface
 
     def samples(self, options, *args, **kwargs):
