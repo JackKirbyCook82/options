@@ -32,7 +32,6 @@ class ForwardCalculator(Generator, Alerting):
         assert self.arguments(spreads) == ["spread", "spot"]
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
-        self.__weights = weights
         self.__spreads = spreads
 
     def __call__(self, options, *args, **kwargs):

@@ -55,6 +55,7 @@ class MarketCalculator(Equations, Alerting):
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     moneyness = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
     tightness = lambda bid, ask, median: (ask - bid) / median
+    quality = lambda tightness, demand, supply: np.sqrt(1 + demand + supply) / (tightness ** 2 + 1e-6)
     mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
     median = lambda bid, ask: (bid + ask) / 2
     spread = lambda bid, ask: ask - bid
