@@ -52,7 +52,9 @@ class ForwardCalculator(Generator, Alerting):
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
                 samples = self.samples(options, *args, **kwargs)
-                spreads = self.spreads(samples["spread"], spot[0]).squeeze()
+                spreads = self.spreads(samples["spread"], spot[0])
+                assert isinstance(spreads, (pd.Series, pd.DataFrame))
+                spreads = spreads.squeeze() if isinstance(spreads, pd.DataFrame) else spreads
                 samples = samples.where(spreads).dropna(how="all", inplace=False)
                 weights = self.weights(samples["supply"], samples["demand"], samples["spread"])
                 if len(samples) >= self.samplesize:
@@ -82,13 +84,14 @@ class ForwardCalculator(Generator, Alerting):
     def secondary(samples, weights, *args, tau, interest, dividends, **kwargs):
         discount = np.exp(tau * (interest - dividends))
         forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
-        forward = np.average(forwards, weights=weights)
+        try: forward = np.average(forwards, weights=weights)
+        except ZeroDivisionError: raise ForwardSampleError()
         return dict(forward=forward, discount=discount, error=np.NaN)
 
     @staticmethod
     def tertiary(*args, spot, tau, interest, dividends, **kwargs):
-        discount = np.exp(tau[0] * (interest - dividends))
-        forward = spot[0] * discount
+        discount = np.exp(tau * (interest - dividends))
+        forward = spot * discount
         return dict(forward=forward, discount=discount, error=np.NaN)
 
     @staticmethod

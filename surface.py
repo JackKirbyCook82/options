@@ -9,7 +9,6 @@ Created on Fri Apr 10 2026
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import date as Date
 from mpl_toolkits.mplot3d import Axes3D
 from collections import namedtuple as ntuple
 from scipy.interpolate import CubicSpline, RectBivariateSpline
@@ -25,8 +24,8 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-Sample = ntuple("Sample", "dte mae tiv")
-Curve = ntuple("Spline", "dte spline bounds")
+Sample = ntuple("Sample", "tau mae tiv")
+Curve = ntuple("Spline", "tau spline bounds")
 Axes = ntuple("Axes", "t k w")
 Domain = ntuple("Domain", "t k")
 Range = ntuple("Range", "w")
@@ -43,6 +42,11 @@ class Surface(object):
         self.__domain = Domain(taxis, kaxis)
         self.__range = Range(waxis)
         self.__surface = surface
+
+    def __call__(self, t, k):
+        t, k = np.asarray(t, dtype=float), np.asarray(k, dtype=float)
+        if self.extrapolation(t, k): raise SurfaceExtrapolationError()
+        return self.surface(t, k)
 
     def w(self, t, k):
         t, k = np.asarray(t, dtype=float), np.asarray(k, dtype=float)
@@ -110,7 +114,7 @@ class SurfacePlotter(Alerting):
         super().__init__(*args, **kwargs)
         figure = plt.figure(figsize=figsize)
         ax = figure.add_subplot(111, projection="3d")
-        ax.set_xlabel("DTE|t")
+        ax.set_xlabel("TAU|t")
         ax.set_ylabel("MAE|k")
         ax.set_zlabel("TIV|w")
         self.__gridsize = int(gridsize)
@@ -127,15 +131,15 @@ class SurfacePlotter(Alerting):
         t = np.linspace(axes.t.min(), axes.t.max(), self.gridsize)
         k = np.linspace(axes.k.min(), axes.k.max(), self.gridsize)
         tt, kk = np.meshgrid(t, k, indexing="ij")
-        ww = surface.w(t, k)
-        self.ax.plot_surface(tt, kk, ww, alpha=0.5)
+        ww = surface(t, k)
+        self.ax.plot_surface(tt, kk, ww, alpha=0.75, color="blue")
 
     def options(self, options, *args, **kwargs):
-        options = options[["mae", "dte", "tiv"]]
+        options = options[["tau", "mae", "tiv"]]
         mask = options["tiv"].notna()
         options = options.where(mask)
         options = options.dropna(how="all", inplace=False)
-        self.ax.scatter(options["dte"], options["mae"], options["tiv"], s=10)
+        self.ax.scatter(options["tau"], options["mae"], options["tiv"], s=30, color="red")
 
     @property
     def gridsize(self): return self.__gridsize
@@ -143,19 +147,6 @@ class SurfacePlotter(Alerting):
     def figure(self): return self.__figure
     @property
     def ax(self): return self.__ax
-
-
-class SurfaceCalculator(Equations, Alerting):
-    mae = lambda forward, strike, option: np.log10(forward / strike) * option.astype(int)
-    dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
-    tiv = lambda implied, tau: tau * np.square(implied)
-
-    def __call__(self, options, *args, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        surface = self.execute(options, *args, **kwargs)
-        options = pd.concat([options, surface], axis=1)
-        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
-        return surface
 
 
 class SurfaceCreator(Alerting):
@@ -180,23 +171,24 @@ class SurfaceCreator(Alerting):
         return surface
 
     def samples(self, options, *args, **kwargs):
-        samples = options[["dte", "mae", "tiv"]].groupby(["dte", "mae"], as_index=False)["tiv"].mean()
-        samples = {dte: dataframe.sort_values("mae") for dte, dataframe in samples.groupby("dte", sort="dte")}
-        samples = {dte: (dataframe["mae"].to_numpy(), dataframe["tiv"].to_numpy()) for dte, dataframe in samples.items()}
-        samples = {dte: (mae, tiv) for dte, (mae, tiv) in samples.items() if len(mae) >= self.samplesize}
-        samples = {dte: (mae, tiv) for dte, (mae, tiv) in samples.items() if not np.any(np.diff(mae) <= 0)}
-        samples = {dte: (mae, tiv, np.argsort(mae)) for dte, (mae, tiv) in samples.items()}
-        samples = [Sample(dte, mae[order], tiv[order]) for dte, (mae, tiv, order) in samples.items()]
+        samples = options[["tau", "mae", "tiv"]].where(options["tiv"].notna()).dropna(how="all", inplace=False)
+        samples = samples.groupby(["tau", "mae"], as_index=False)["tiv"].mean()
+        samples = {tau: dataframe.sort_values("mae") for tau, dataframe in samples.groupby("tau", sort="tau")}
+        samples = {tau: (dataframe["mae"].to_numpy(), dataframe["tiv"].to_numpy()) for tau, dataframe in samples.items()}
+        samples = {tau: (mae, tiv) for tau, (mae, tiv) in samples.items() if len(mae) >= self.samplesize}
+        samples = {tau: (mae, tiv) for tau, (mae, tiv) in samples.items() if not np.any(np.diff(mae) <= 0)}
+        samples = {tau: (mae, tiv, np.argsort(mae)) for tau, (mae, tiv) in samples.items()}
+        samples = [Sample(tau, mae[order], tiv[order]) for tau, (mae, tiv, order) in samples.items()]
         return samples
 
     def curves(self, samples, *args, **kwargs):
-        splines = [CubicSpline(mae, tiv, bc_type=self.curvetype) for (dte, mae, tiv) in samples]
-        boundarys = [NumRange.create([mae[0], mae[-1]]) for (dte, mae, tiv) in samples]
-        curves = [Curve(sample.dte, spline, bounds) for (sample, spline, bounds) in zip(samples, splines, boundarys)]
+        splines = [CubicSpline(mae, tiv, bc_type=self.curvetype) for (tau, mae, tiv) in samples]
+        boundarys = [NumRange.create([mae[0], mae[-1]]) for (tau, mae, tiv) in samples]
+        curves = [Curve(sample.tau, spline, bounds) for (sample, spline, bounds) in zip(samples, splines, boundarys)]
         return curves
 
     @staticmethod
-    def taxis(curves, *args, **kwargs): return np.array([curve.dte for curve in curves])
+    def taxis(curves, *args, **kwargs): return np.array([curve.tau for curve in curves])
     def kaxis(self, curves, *args, **kwargs):
         left = max(curve.bounds.minimum for curve in curves)
         right = min(curve.bounds.maximum for curve in curves)
@@ -211,6 +203,18 @@ class SurfaceCreator(Alerting):
     def gridsize(self): return self.__gridsize
     @property
     def degree(self): return self.__degree
+
+
+class SurfaceCalculator(Equations, Alerting):
+    mae = lambda forward, strike, option: np.log10(forward / strike) * option.astype(int)
+    tiv = lambda implied, tau: tau * np.square(implied)
+
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        surface = self.execute(options, *args, **kwargs)
+        surface = pd.concat([options, surface], axis=1)
+        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
+        return surface
 
 
 
