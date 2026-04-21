@@ -8,10 +8,8 @@ Created on Fri Apr 10 2026
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from collections import namedtuple as ntuple
-from scipy.interpolate import CubicSpline, RectBivariateSpline
+from scipy.interpolate import CubicSpline, RectBivariateSpline, SmoothBivariateSpline
 
 from support.finance import Concepts, Alerting
 from support.equations import Equations
@@ -19,67 +17,25 @@ from support.concepts import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["SurfaceCalculator", "SurfaceCreator", "SurfacePlotter"]
+__all__ = ["SurfaceCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
 Curve = ntuple("Curve", "sample spline bounds")
 Sample = ntuple("Sample", "t k w")
-Axes = ntuple("Axes", "t k w")
 Domain = ntuple("Domain", "t k")
-Range = ntuple("Range", "w")
 
 
 class SurfaceError(Exception): pass
 class SurfaceExtrapolationError(SurfaceError): pass
 
 
-class SurfaceCalculator(Equations, Alerting):
-    mae = lambda forward, strike, option: np.log(forward / strike) * option.astype(int)
-    tiv = lambda implied, tau: tau * np.square(implied)
-
-    def __call__(self, options, *args, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        surface = self.execute(options, *args, **kwargs)
-        surface = pd.concat([options, surface], axis=1)
-        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
-        return surface
-
-
-class Curves(object):
-    def __iter__(self): return iter(self.curves)
-    def __init__(self, options, *args, samplesize=5, curvetype="natural", **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        samples = self.samples(options, *args, size=samplesize, **kwargs)
-        splines = [CubicSpline(mae, tiv, bc_type=curvetype) for (tau, mae, tiv) in samples]
-        boundarys = [NumRange.create([mae[0], mae[-1]]) for (tau, mae, tiv) in samples]
-        curves = [Curve(sample, spline, bounds) for (sample, spline, bounds) in zip(samples, splines, boundarys)]
-        self.__curves = curves
-
-    @staticmethod
-    def samples(options, *args, size, **kwargs):
-        samples = options[["tau", "mae", "tiv"]].dropna(how="any", inplace=False)
-        samples = samples.groupby(["tau", "mae"], as_index=False)["tiv"].mean()
-        samples = {tau: dataframe.sort_values("mae") for tau, dataframe in samples.groupby("tau", sort="tau")}
-        samples = {tau: (dataframe["mae"].to_numpy(), dataframe["tiv"].to_numpy()) for tau, dataframe in samples.items()}
-        samples = {tau: (mae, tiv) for tau, (mae, tiv) in samples.items() if len(mae) >= size}
-        samples = {tau: (mae, tiv) for tau, (mae, tiv) in samples.items() if not np.any(np.diff(mae) <= 0)}
-        samples = {tau: (mae, tiv, np.argsort(mae)) for tau, (mae, tiv) in samples.items()}
-        samples = [Sample(tau, mae[order], tiv[order]) for tau, (mae, tiv, order) in samples.items()]
-        return samples
-
-    @property
-    def curves(self): return self.__curves
-
-
 class Surface(object):
-    def __init__(self, taxis, kaxis, waxis, *args, degree, smoothing, **kwargs):
-        assert isinstance(degree, Domain)
-        surface = RectBivariateSpline(taxis, kaxis, waxis, kx=degree.t, ky=degree.k, s=smoothing)
-        self.__domain = Domain(taxis, kaxis)
-        self.__range = Range(waxis)
+    def __init__(self, *args, surface, domain, curves=None, **kwargs):
         self.__surface = surface
+        self.__curves = curves
+        self.__domain = domain
 
     def __call__(self, t, k):
         t, k = np.asarray(t, dtype=float), np.asarray(k, dtype=float)
@@ -116,112 +72,93 @@ class Surface(object):
         if self.extrapolation(t, k): raise SurfaceExtrapolationError()
         return np.sqrt(np.maximum(self.w(t, k), 0.0) / t)
 
-    def extrapolation(self, taxis, kaxis):
+    def extrapolation(self, t, k):
         boundarys = self.boundarys()
-        taxis = np.any((taxis < boundarys.t.minimum) | (taxis > boundarys.t.maximum))
-        kaxis = np.any((kaxis < boundarys.k.minimum) | (kaxis > boundarys.k.maximum))
-        return taxis | kaxis
+        t = np.any((t < boundarys.t.minimum) | (t > boundarys.t.maximum))
+        k = np.any((k < boundarys.k.minimum) | (k > boundarys.k.maximum))
+        return t | k
 
-    def interpolation(self, taxis, kaxis):
+    def interpolation(self, t, k):
         boundarys = self.boundarys()
-        taxis = np.all((taxis >= boundarys.t.minimum) | (taxis <= boundarys.t.maximum))
-        kaxis = np.all((kaxis >= boundarys.k.minimum) | (kaxis <= boundarys.k.maximum))
-        return taxis & kaxis
+        t = np.all((t >= boundarys.t.minimum) | (t <= boundarys.t.maximum))
+        k = np.all((k >= boundarys.k.minimum) | (k <= boundarys.k.maximum))
+        return t & k
 
     def boundarys(self):
-        taxis = NumRange.create([self.domain.t[0], self.domain.t[-1]])
-        kaxis = NumRange.create([self.domain.k[0], self.domain.k[-1]])
-        return Domain(taxis, kaxis)
-
-    def axes(self):
-        taxis = self.domain.t.copy()
-        kaxis = self.domain.k.copy()
-        waxis = self.range.w.copy()
-        return Axes(taxis, kaxis, waxis)
+        t = NumRange.create([self.domain.t[0], self.domain.t[-1]])
+        k = NumRange.create([self.domain.k[0], self.domain.k[-1]])
+        return Domain(t, k)
 
     @property
     def surface(self): return self.__surface
     @property
-    def domain(self): return self.__domain
+    def curves(self): return self.__curves
     @property
-    def range(self): return self.__range
+    def domain(self): return self.__domain
 
 
-class SurfaceCreator(Alerting):
-    def __init__(self, *args, samplesize=5, curvetype="natural", gridsize=100, degree=(2, 3), smoothing=1e-2, **kwargs):
-        super().__init__(*args, **kwargs)
-        degree = (degree, degree) if isinstance(degree, int) else degree
-        assert isinstance(degree, tuple) and len(degree) == 2
-        self.__smoothing = float(smoothing)
-        self.__samplesize = int(samplesize)
-        self.__curvetype = str(curvetype)
-        self.__gridsize = int(gridsize)
-        self.__degree = Domain(*degree)
+class CurveInterpolation(list):
+    def __init__(self, options, *args, samplesize=5, curvetype="natural", **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        samples = options[["tau", "mae", "tiv"]].dropna(how="any", inplace=False)
+        samples = samples.groupby(["tau", "mae"], as_index=False)["tiv"].mean()
+        samples = self.samples(samples, *args, size=samplesize, **kwargs)
+        splines = [CubicSpline(mae, tiv, bc_type=curvetype) for (tau, mae, tiv) in samples]
+        boundarys = [NumRange.create([mae[0], mae[-1]]) for (tau, mae, tiv) in samples]
+        curves = [Curve(sample, spline, bounds) for (sample, spline, bounds) in zip(samples, splines, boundarys)]
+        super().__init__(curves)
 
-    def __call__(self, options, *args, **kwargs):
-        parameters = dict(samplesize=self.samplesize, curvetype=self.curvetype)
-        curves = Curves(options, **parameters)
+    @staticmethod
+    def samples(samples, *args, size, **kwargs):
+        for tau, sample in samples.groupby("tau", sort="tau"):
+            sample = sample.sort_value("mae")
+            mae = sample["mae"].to_numpy()
+            tiv = sample["tiv"].to_numpy()
+            if len(mae) < size: continue
+            if np.any(np.diff(mae) > 0): continue
+            order = np.argsort(mae)
+            sample = Sample(tau, mae[order], tiv[order])
+            yield sample
+
+
+class SurfaceInterpolation(Surface):
+    def __init__(self, options, *args, degree=(2, 3), smoothing=1e-4, gridsize=100, **kwargs):
+        curves = CurveInterpolation(options, *args, **kwargs)
         left = max(curve.bounds.minimum for curve in curves)
         right = min(curve.bounds.maximum for curve in curves)
         assert left < right
-        taxis = np.array([curve.sample.t for curve in curves])
-        kaxis = np.linspace(left, right, self.gridsize)
-        waxis = np.array([curve.spline(kaxis) for index, curve in enumerate(curves)])
-        surface = Surface(taxis, kaxis, waxis, degree=self.degree, smoothing=self.smoothing)
-        self.alert(options, title="Created", instrument=Concepts.Securities.Instrument.OPTION)
+        t = np.array([curve.sample.t for curve in curves])
+        k = np.linspace(left, right, gridsize)
+        w = np.array([curve.spline(k) for index, curve in enumerate(curves)])
+        surface = RectBivariateSpline(t, k, w, kx=degree.t, ky=degree.k, s=smoothing)
+        parameters = dict(surface=surface, curves=curves, domain=Domain(t, k))
+        super().__init__(*args, **parameters, **kwargs)
+
+
+class SurfaceRegression(Surface):
+    def __init__(self, options, *args, degree=(2, 3), smoothing=1e-4, gridsize=100, **kwargs):
+        samples = options[["tau", "mae", "tiv", "quality"]].dropna(how="any", inplace=False)
+        tau = samples["tau"].to_numpy(dtype=float)
+        mae = samples["mae"].to_numpy(dtype=float)
+        tiv = samples["tiv"].to_numpy(dtype=float)
+        quality = samples["quality"].to_numpy(dtype=float)
+        t = np.linspace(tau.min(), tau.max(), gridsize)
+        k = np.linspace(mae.min(), mae.max(), gridsize)
+        surface = SmoothBivariateSpline(tau, mae, tiv, w=quality, kx=degree.t, ky=degree.k, s=smoothing)
+        parameters = dict(surface=surface, curves=None, domain=Domain(t, k))
+        super().__init__(*args, **parameters, **kwargs)
+
+
+class SurfaceCalculator(Equations, Alerting):
+    mae = lambda forward, strike, option: np.log(forward / strike) * option.astype(int)
+    tiv = lambda implied, tau: tau * np.square(implied)
+
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        surface = self.execute(options, *args, **kwargs)
+        surface = pd.concat([options, surface], axis=1)
+        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return surface
-
-    @property
-    def samplesize(self): return self.__samplesize
-    @property
-    def curvetype(self): return self.__curvetype
-    @property
-    def smoothing(self): return self.__smoothing
-    @property
-    def gridsize(self): return self.__gridsize
-    @property
-    def degree(self): return self.__degree
-
-
-class SurfacePlotter(Alerting):
-    def __init__(self, *args, figsize=(10, 10), gridsize=100, **kwargs):
-        super().__init__(*args, **kwargs)
-        figure = plt.figure(figsize=figsize)
-        ax = figure.add_subplot(111, projection="3d")
-        ax.set_xlabel("TAU|t")
-        ax.set_ylabel("MAE|k")
-        ax.set_zlabel("TIV|w")
-        self.__gridsize = int(gridsize)
-        self.__figure = figure
-        self.__ax = ax
-
-    def __call__(self, options, surface, *args, **kwargs):
-        self.options(options, *args, **kwargs)
-        self.surface(surface, *args, **kwargs)
-        self.alert(options, title="Plotted", instrument=Concepts.Securities.Instrument.OPTION)
-        plt.show()
-
-    def surface(self, surface, *args, **kwargs):
-        axes = surface.axes()
-        t = np.linspace(axes.t.min(), axes.t.max(), self.gridsize)
-        k = np.linspace(axes.k.min(), axes.k.max(), self.gridsize)
-        tt, kk = np.meshgrid(t, k, indexing="ij")
-        ww = surface(t, k)
-        self.ax.plot_surface(tt, kk, ww, alpha=0.75, color="blue")
-
-    def options(self, options, *args, **kwargs):
-        options = options[["tau", "mae", "tiv"]]
-        mask = options["tiv"].notna()
-        options = options.where(mask)
-        options = options.dropna(how="all", inplace=False)
-        self.ax.scatter(options["tau"], options["mae"], options["tiv"], s=30, color="red")
-
-    @property
-    def gridsize(self): return self.__gridsize
-    @property
-    def figure(self): return self.__figure
-    @property
-    def ax(self): return self.__ax
 
 
 
