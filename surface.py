@@ -8,8 +8,8 @@ Created on Fri Apr 10 2026
 
 import numpy as np
 import pandas as pd
-from collections import namedtuple as ntuple
-from scipy.interpolate import CubicSpline, RectBivariateSpline, SmoothBivariateSpline
+from abc import ABC, abstractmethod
+from scipy.interpolate import UnivariateSpline, CubicSpline, PchipInterpolator, Akima1DInterpolator, RectBivariateSpline, SmoothBivariateSpline
 
 from support.finance import Concepts, Alerting
 from support.equations import Equations
@@ -22,10 +22,61 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-Curve = ntuple("Curve", "sample spline bounds")
-Sample = ntuple("Sample", "t k w")
-Domain = ntuple("Domain", "t k")
+class Curve(ABC):
+    def __init__(self, xaxis, yaxis, /, **kwargs):
+        assert isinstance(xaxis, (pd.Series, np.ndarray)) and isinstance(yaxis, (pd.Series, np.ndarray))
+        assert len(xaxis) == len(yaxis)
+        xaxis = np.asarray(xaxis, dtype=np.float32)
+        yaxis = np.asarray(yaxis, dtype=np.float32)
+        order = np.argsort(xaxis)
+        xaxis, yaxis = (xaxis[order], yaxis[order])
+        curve = self.create(xaxis, yaxis, **kwargs)
+        boundary = NumRange.create([xaxis.min(), yaxis.max()])
+        self.__boundary = boundary
+        self.__curve = curve
 
+    @staticmethod
+    @abstractmethod
+    def create(xaxis, yaxis, /, method, weights, smoothing, degree, **kwargs): pass
+
+    @property
+    def boundary(self): return self.__boundary
+    @property
+    def curve(self): return self.__curve
+
+
+class RegressiveCurve(Curve):
+    @staticmethod
+    def create(xaxis, yaxis, /, weights, smoothing, degree, **kwargs):
+        return UnivariateSpline(xaxis, yaxis, w=weights, s=smoothing, k=degree, ext=2)
+
+class InterpolativeCurve(Curve):
+    @staticmethod
+    def create(xaxis, yaxis, /, method, **kwargs): return CubicSpline(xaxis, yaxis, bc_type=method)
+
+class ShapeInterpolativeCurve(InterpolativeCurve):
+    @staticmethod
+    def create(xaxis, yaxis, /, **kwargs): return PchipInterpolator(xaxis, yaxis, extrapolate=False)
+
+class VisualInterpolativeCurve(InterpolativeCurve):
+    @staticmethod
+    def create(xaxis, yaxis, /, **kwargs): return Akima1DInterpolator(xaxis, yaxis)
+
+
+class Surface(ABC):
+    pass
+
+
+
+
+
+# RegularGridInterpolator (2D, interpolation)
+# RectBivariateSpline (2D, interpolation)
+# SmoothBivariateSpline (2D, regression)
+
+# Curve = ntuple("Curve", "sample spline bounds")
+# Sample = ntuple("Sample", "t k w")
+# Domain = ntuple("Domain", "t k")
 
 class SurfaceError(Exception): pass
 class SurfaceExtrapolationError(SurfaceError): pass
@@ -80,8 +131,8 @@ class Surface(object):
 
     def interpolation(self, t, k):
         boundarys = self.boundarys()
-        t = np.all((t >= boundarys.t.minimum) | (t <= boundarys.t.maximum))
-        k = np.all((k >= boundarys.k.minimum) | (k <= boundarys.k.maximum))
+        t = np.all((t >= boundarys.t.minimum) & (t <= boundarys.t.maximum))
+        k = np.all((k >= boundarys.k.minimum) & (k <= boundarys.k.maximum))
         return t & k
 
     def boundarys(self):

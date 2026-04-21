@@ -43,7 +43,7 @@ class SanityFilter(MarketFilter, variables=["sanity"]):
     realistic = lambda bid, ask: ask > bid
 
 
-class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 2, "money": 0.20, "tight": 0.20}):
+class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 5, "money": 0.20, "tight": 0.20}):
     viability = lambda moneyed, tightened, supplied, demanded:  np.logical_and.reduce([moneyed, tightened, supplied, demanded])
     moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
     tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
@@ -53,7 +53,7 @@ class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 2
 
 class MarketCalculator(Equations, Alerting):
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
-    moneyness = lambda spot, strike, option: np.log10(spot / strike) * option.astype(int)
+    moneyness = lambda spot, strike, option: np.log(spot / strike) * option.astype(int)
     tightness = lambda bid, ask, median: (ask - bid) / median
     quality = lambda tightness, demand, supply: np.sqrt(1 + demand + supply) / (tightness ** 2 + 1e-6)
     mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)

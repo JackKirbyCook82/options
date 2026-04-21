@@ -33,6 +33,7 @@ class ForwardCalculator(Generator, Alerting):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
         self.__spreads = spreads
+        self.__weights = weights
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
