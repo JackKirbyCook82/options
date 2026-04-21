@@ -67,6 +67,11 @@ class Surface(ABC):
     pass
 
 
+class RegressiveSurface(Surface):
+    pass
+
+class InterpolativeSurface(Surface):
+    pass
 
 
 
