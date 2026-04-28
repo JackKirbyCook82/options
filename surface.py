@@ -8,6 +8,7 @@ Created on Fri Apr 10 2026
 
 import numpy as np
 import pandas as pd
+from dataclasses import dataclass
 
 from support.finance import Concepts, Alerting
 from support.equations import Equations
@@ -17,6 +18,10 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["SurfaceCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass
+class Axes: tau: int; mae: int
 
 
 class SurfaceCalculator(Equations, Alerting):
@@ -29,8 +34,6 @@ class SurfaceCalculator(Equations, Alerting):
         surface = pd.concat([options, surface], axis=1)
         self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return surface
-
-
 
 
 
