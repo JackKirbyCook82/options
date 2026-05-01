@@ -32,10 +32,10 @@ class SurfaceCalculator(Equations, Alerting):
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
-        options = options[mask].dropna(how="all", inplace=False)
         surface = self.execute(options, *args, **kwargs)
         options = pd.concat([options, surface], axis=1)
+        mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
+        options = options[mask].dropna(how="all", inplace=False)
         self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return options
 
@@ -106,7 +106,7 @@ class LocalCalculator(Alerting):
             if not self.adequate(local): continue
             self.alert(local, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
             yield local; count += 1
-            if count is not None and count >= self.count: break
+            if self.count is not None and count >= self.count: break
 
     def generator(self, options, pairs):
         for axes in pairs:
@@ -116,6 +116,13 @@ class LocalCalculator(Alerting):
             mae = options["mae"].between(mae.minimum, mae.maximum)
             yield options.loc[tau & mae]
 
+    def tau(self, options):
+        tau = np.sort(options["tau"].dropna().unique().astype(float))
+        limits = NumRange.create([tau.min() + self.radius.tau, tau.max() - self.radius.tau])
+        tau = tau[(tau >= limits.minimum) & (tau <= limits.maximum)]
+        tau = np.fromiter(self.alternate(tau), dtype=float)
+        return tau
+
     def mae(self, options):
         mae = options["mae"].to_numpy(dtype=float)
         limits = NumRange.create([np.nanmin(mae) + self.radius.mae, np.nanmax(mae) - self.radius.mae])
@@ -124,25 +131,19 @@ class LocalCalculator(Alerting):
         order = np.argsort(np.abs(mae))
         return mae[order]
 
-    def tau(self, options):
-        tau = np.sort(options["tau"].dropna().unique().astype(float))
-        limits = NumRange.create([tau.min() + self.radius.tau, tau.max() - self.radius.tau])
-        tau = tau[(tau >= limits.minimum) & (tau <= limits.maximum)]
-        tau = np.array(self.alternate(tau))
-        return tau
-
     def adequate(self, local):
-        tau = len(local["tau"].nunique()) >= self.coverage.tau
-        mae = len(local["mae"].nunique()) >= self.coverage.mae
+        tau = local["tau"].nunique() >= self.coverage.tau
+        mae = local["mae"].nunique() >= self.coverage.mae
         quantity = len(local) >= self.quantity
         coverage = tau & mae
         return quantity & coverage
 
     @staticmethod
     def alternate(array):
-        center = array[len(array) // 2]
+        center = len(array) // 2
+        yield array[center]
         left = iter(array[:center][::-1])
-        right = iter(array[center:])
+        right = iter(array[center+1:])
         while True:
             try: yield next(left)
             except StopIteration: yield from right; return
