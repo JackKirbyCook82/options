@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Apr 10 2026
-@name:   Surface Objects
+@name:   Option Dataset Objects
 @author: Jack Kirby Cook
 
 """
@@ -24,39 +24,45 @@ __license__ = "MIT License"
 
 
 @dataclass(frozen=True)
-class Axes: tau: float; mae: float
+class Variables: tau: float; mae: float; tiv: float = None
+
+@dataclass(frozen=True)
+class Axes: x: float; y: float; z: float = None
 
 @dataclass(frozen=False)
 class Dataset:
     scatter: pd.DataFrame = None
     surface: Surface = None
-    center: Axes = None
-    radius: Axes = None
+    center: Variables = None
+    radius: Variables = None
 
     def __bool__(self): return self.scatter is not None and not self.scatter.empty
     def __len__(self): return len(self.scatter)
 
     def __post_init__(self):
-        tau = self.scatter["tau"].notna()
-        mae = self.scatter["mae"].notna()
-        tiv = self.scatter["tiv"].notna()
-        mask = tau & mae & tiv
-        scatter = self.scatter[mask].dropna(how="all", inplace=False)
-        columns = dict(zip(list("tau|mae|tiv".split("|")), list("xyz")))
-        scatter = scatter.rename(columns=columns)
-        self.scatter = scatter
+        mask = (self.scatter["tau"].notna() & self.scatter["mae"].notna() & self.scatter["tiv"].notna())
+        self.scatter = self.scatter.loc[mask].copy()
 
     @property
     def inner(self):
-        tau = NumRange.create([self.scatter["tau"].min(), self.scatter["tau"].max()])
-        mae = NumRange.create([self.scatter["mae"].min(), self.scatter["mae"].max()])
-        return Axes(tau=tau, mae=mae)
+        x = NumRange.create([self.scatter["tau"].min(), self.scatter["tau"].max()])
+        y = NumRange.create([self.scatter["mae"].min(), self.scatter["mae"].max()])
+        return Axes(x=x, y=y)
 
     @property
     def outer(self):
-        tau = NumRange.create([self.center.tau - self.radius.tau, self.center.tau + self.radius.tau])
-        mae = NumRange.create([self.center.mae - self.radius.mae, self.center.mae + self.radius.mae])
-        return Axes(tau=tau, mae=mae)
+        x = NumRange.create([self.center.tau - self.radius.tau, self.center.tau + self.radius.tau])
+        y = NumRange.create([self.center.mae - self.radius.mae, self.center.mae + self.radius.mae])
+        return Axes(x=x, y=y)
+
+    @property
+    def xyz(self): return self.scatter.rename(columns=dict(zip("tau,mae,tiv".split(","), list("xyz"))), inplace=False)
+    @property
+    def x(self): return self.scatter["tau"].rename("x")
+    @property
+    def y(self): return self.scatter["mae"].rename("y")
+    @property
+    def z(self): return self.scatter["tiv"].rename("z")
 
 
 class DatasetCalculator(Alerting): pass
@@ -74,11 +80,11 @@ class GeneralCalculator(DatasetCalculator, Equations):
 
 
 class LocalCalculator(DatasetCalculator):
-    def __init__(self, *args, count=None, quantity=15, coverage=Axes(tau=5, mae=10), radius=Axes(tau=0.15, mae=0.05), **kwargs):
-        assert isinstance(radius, (tuple, Axes))
+    def __init__(self, *args, count=None, quantity=15, coverage=Variables(tau=5, mae=10), radius=Variables(tau=0.15, mae=0.05), **kwargs):
+        assert isinstance(radius, (tuple, Variables))
         super().__init__(*args, **kwargs)
-        coverage = Axes(**dict(zip(["tau", "mae"], coverage))) if isinstance(coverage, tuple) else coverage
-        radius = Axes(**dict(zip(["tau", "mae"], radius))) if isinstance(radius, tuple) else radius
+        coverage = Variables(**dict(zip(["tau", "mae"], coverage))) if isinstance(coverage, tuple) else coverage
+        radius = Variables(**dict(zip(["tau", "mae"], radius))) if isinstance(radius, tuple) else radius
         self.__quantity = int(quantity)
         self.__coverage = coverage
         self.__radius = radius
@@ -90,7 +96,7 @@ class LocalCalculator(DatasetCalculator):
         mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
         options = options[mask].dropna(how="all", inplace=False)
         tau, mae = self.tau(options), self.mae(options)
-        pairs, count = [Axes(tau=i, mae=j) for j in mae for i in tau], 0
+        pairs, count = [Variables(tau=i, mae=j) for j in mae for i in tau], 0
         for center in pairs:
             tau = NumRange.create([center.tau - self.radius.tau, center.tau + self.radius.tau])
             mae = NumRange.create([center.mae - self.radius.mae, center.mae + self.radius.mae])
@@ -154,6 +160,7 @@ class DatasetScreener(Alerting):
         self.__threshold = threshold
 
     def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
         mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
         options = options[mask].dropna(how="all", inplace=False)
         if len(options) < max(3, self.neighbors + 1): return options
