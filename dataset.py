@@ -11,9 +11,9 @@ import pandas as pd
 from dataclasses import dataclass
 from scipy.spatial import cKDTree
 
+from support.concepts import NumRange, DateRange
 from support.finance import Concepts, Alerting
 from support.equations import Equations
-from support.concepts import NumRange
 from support.surface import Surface
 
 __version__ = "1.0.0"
@@ -39,21 +39,39 @@ class Dataset:
     def __bool__(self): return self.scatter is not None and not self.scatter.empty
     def __len__(self): return len(self.scatter)
 
+    def __str__(self):
+        tickers = "|".join(list(self.scatter["ticker"].unique()))
+        expires = DateRange.create(list(self.scatter["expire"].unique()))
+        expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
+        inner, outer = self.inner, self.outer
+        variables = [self.string(axis, inner, outer) for axis in list("xyz")]
+        return "\n".join([f"{tickers}|{expires}[{len(self):.0f}]"] + variables)
+
     def __post_init__(self):
         mask = (self.scatter["tau"].notna() & self.scatter["mae"].notna() & self.scatter["tiv"].notna())
         self.scatter = self.scatter.loc[mask].copy()
+
+    @staticmethod
+    def string(axis, inner, outer):
+        inner, outer = getattr(inner, axis), getattr(outer, axis)
+        inner = f"({inner.minimum:.03f}, {inner.maximum:.03f})"
+        outer = f"({outer.minimum:.03f}, {outer.maximum:.03f})"
+        string = f"{str(axis).upper()}|{inner}∈{outer}"
+        return string
 
     @property
     def inner(self):
         x = NumRange.create([self.scatter["tau"].min(), self.scatter["tau"].max()])
         y = NumRange.create([self.scatter["mae"].min(), self.scatter["mae"].max()])
-        return Axes(x=x, y=y)
+        z = NumRange.create([self.scatter["tiv"].min(), self.scatter["tiv"].max()])
+        return Axes(x=x, y=y, z=z)
 
     @property
     def outer(self):
         x = NumRange.create([self.center.tau - self.radius.tau, self.center.tau + self.radius.tau])
         y = NumRange.create([self.center.mae - self.radius.mae, self.center.mae + self.radius.mae])
-        return Axes(x=x, y=y)
+        z = NumRange.create([self.center.tiv - self.radius.tiv, self.center.tiv + self.radius.tiv])
+        return Axes(x=x, y=y, z=z)
 
     @property
     def xyz(self): return self.scatter.rename(columns=dict(zip("tau,mae,tiv".split(","), list("xyz"))), inplace=False)
@@ -65,7 +83,13 @@ class Dataset:
     def z(self): return self.scatter["tiv"].rename("z")
 
 
-class DatasetCalculator(Alerting): pass
+class DatasetCalculator(Alerting):
+    @staticmethod
+    def average(axis, decimals): return round((axis.minimum + axis.maximum) / 2, decimals)
+    @staticmethod
+    def distance(axis, decimals): return round((axis.maximum - axis.minimum) / 2, decimals)
+
+
 class GeneralCalculator(DatasetCalculator, Equations):
     mae = lambda forward, strike, option: np.log(forward / strike) * option.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
@@ -74,8 +98,13 @@ class GeneralCalculator(DatasetCalculator, Equations):
         assert isinstance(options, pd.DataFrame)
         scatter = self.execute(options, *args, **kwargs)
         scatter = pd.concat([options, scatter], axis=1)
+        tau = NumRange.create([scatter["tau"].min(), scatter["tau"].max()])
+        mae = NumRange.create([scatter["mae"].min(), scatter["mae"].max()])
+        tiv = NumRange.create([scatter["tiv"].min(), scatter["tiv"].max()])
+        center = Variables(tau=self.average(tau, 3), mae=self.average(mae, 3), tiv=self.average(tiv, 3))
+        radius = Variables(tau=self.distance(tau, 3), mae=self.distance(mae, 3), tiv=self.distance(tiv, 3))
+        dataset = Dataset(scatter=scatter, center=center, radius=radius)
         self.alert(scatter, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
-        dataset = Dataset(scatter=scatter)
         return dataset
 
 
@@ -91,21 +120,23 @@ class LocalCalculator(DatasetCalculator):
         self.__count = count
 
     def __call__(self, options, *args, **kwargs):
-        assert isinstance(options, pd.DataFrame) or isinstance(options, Dataset)
-        if isinstance(options, Dataset): options = options.scatter
+        assert isinstance(options, pd.DataFrame)
         mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
         options = options[mask].dropna(how="all", inplace=False)
         tau, mae = self.tau(options), self.mae(options)
         pairs, count = [Variables(tau=i, mae=j) for j in mae for i in tau], 0
-        for center in pairs:
-            tau = NumRange.create([center.tau - self.radius.tau, center.tau + self.radius.tau])
-            mae = NumRange.create([center.mae - self.radius.mae, center.mae + self.radius.mae])
+        for pair in pairs:
+            tau = NumRange.create([pair.tau - self.radius.tau, pair.tau + self.radius.tau])
+            mae = NumRange.create([pair.mae - self.radius.mae, pair.mae + self.radius.mae])
             tau = options["tau"].between(tau.minimum, tau.maximum)
             mae = options["mae"].between(mae.minimum, mae.maximum)
             scatter = options.loc[tau & mae]
             if not self.adequate(scatter): continue
+            tiv = NumRange.create([scatter["tiv"].min(), scatter["tiv"].max()])
+            center = Variables(tau=pair.tau, mae=pair.mae, tiv=self.average(tiv, 3))
+            radius = Variables(tau=self.radius.tau, mae=self.radius.mae, tiv=self.distance(tiv, 3))
+            dataset = Dataset(scatter=scatter, center=center, radius=radius)
             self.alert(scatter, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
-            dataset = Dataset(scatter=scatter, center=center, radius=self.radius)
             yield dataset; count += 1
             if self.count is not None and count >= self.count: break
 
