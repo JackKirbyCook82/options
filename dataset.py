@@ -24,7 +24,7 @@ __license__ = "MIT License"
 
 
 @dataclass(frozen=True)
-class Variables: tau: float; mae: float; tiv: float = None
+class Variables: tau: float; mae: float
 
 @dataclass(frozen=True)
 class Axes: x: float; y: float; z: float = None
@@ -44,7 +44,7 @@ class Dataset:
         expires = DateRange.create(list(self.scatter["expire"].unique()))
         expires = f"{expires.minimum.strftime('%Y%m%d')}->{expires.maximum.strftime('%Y%m%d')}"
         inner, outer = self.inner, self.outer
-        variables = [self.string(axis, inner, outer) for axis in list("xyz")]
+        variables = [self.string(axis, inner, outer) for axis in list("xy")]
         return "\n".join([f"{tickers}|{expires}[{len(self):.0f}]"] + variables)
 
     def __post_init__(self):
@@ -56,7 +56,7 @@ class Dataset:
         inner, outer = getattr(inner, axis), getattr(outer, axis)
         inner = f"({inner.minimum:.03f}, {inner.maximum:.03f})"
         outer = f"({outer.minimum:.03f}, {outer.maximum:.03f})"
-        string = f"{str(axis).upper()}|{inner}∈{outer}"
+        string = f"{str(axis).upper()}[{inner} ∈ {outer}]"
         return string
 
     @property
@@ -70,8 +70,7 @@ class Dataset:
     def outer(self):
         x = NumRange.create([self.center.tau - self.radius.tau, self.center.tau + self.radius.tau])
         y = NumRange.create([self.center.mae - self.radius.mae, self.center.mae + self.radius.mae])
-        z = NumRange.create([self.center.tiv - self.radius.tiv, self.center.tiv + self.radius.tiv])
-        return Axes(x=x, y=y, z=z)
+        return Axes(x=x, y=y)
 
     @property
     def xyz(self): return self.scatter.rename(columns=dict(zip("tau,mae,tiv".split(","), list("xyz"))), inplace=False)
@@ -100,16 +99,15 @@ class GeneralCalculator(DatasetCalculator, Equations):
         scatter = pd.concat([options, scatter], axis=1)
         tau = NumRange.create([scatter["tau"].min(), scatter["tau"].max()])
         mae = NumRange.create([scatter["mae"].min(), scatter["mae"].max()])
-        tiv = NumRange.create([scatter["tiv"].min(), scatter["tiv"].max()])
-        center = Variables(tau=self.average(tau, 3), mae=self.average(mae, 3), tiv=self.average(tiv, 3))
-        radius = Variables(tau=self.distance(tau, 3), mae=self.distance(mae, 3), tiv=self.distance(tiv, 3))
+        center = Variables(tau=self.average(tau, 3), mae=self.average(mae, 3))
+        radius = Variables(tau=self.distance(tau, 3), mae=self.distance(mae, 3))
         dataset = Dataset(scatter=scatter, center=center, radius=radius)
         self.alert(scatter, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return dataset
 
 
 class LocalCalculator(DatasetCalculator):
-    def __init__(self, *args, count=None, quantity=15, coverage=Variables(tau=5, mae=10), radius=Variables(tau=0.15, mae=0.05), **kwargs):
+    def __init__(self, *args, quantity=15, coverage=Variables(tau=5, mae=10), radius=Variables(tau=0.15, mae=0.05), **kwargs):
         assert isinstance(radius, (tuple, Variables))
         super().__init__(*args, **kwargs)
         coverage = Variables(**dict(zip(["tau", "mae"], coverage))) if isinstance(coverage, tuple) else coverage
@@ -117,14 +115,13 @@ class LocalCalculator(DatasetCalculator):
         self.__quantity = int(quantity)
         self.__coverage = coverage
         self.__radius = radius
-        self.__count = count
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
         options = options[mask].dropna(how="all", inplace=False)
         tau, mae = self.tau(options), self.mae(options)
-        pairs, count = [Variables(tau=i, mae=j) for j in mae for i in tau], 0
+        pairs = [Variables(tau=i, mae=j) for j in mae for i in tau]
         for pair in pairs:
             tau = NumRange.create([pair.tau - self.radius.tau, pair.tau + self.radius.tau])
             mae = NumRange.create([pair.mae - self.radius.mae, pair.mae + self.radius.mae])
@@ -133,12 +130,11 @@ class LocalCalculator(DatasetCalculator):
             scatter = options.loc[tau & mae]
             if not self.adequate(scatter): continue
             tiv = NumRange.create([scatter["tiv"].min(), scatter["tiv"].max()])
-            center = Variables(tau=pair.tau, mae=pair.mae, tiv=self.average(tiv, 3))
-            radius = Variables(tau=self.radius.tau, mae=self.radius.mae, tiv=self.distance(tiv, 3))
+            center = Variables(tau=pair.tau, mae=pair.mae)
+            radius = Variables(tau=self.radius.tau, mae=self.radius.mae)
             dataset = Dataset(scatter=scatter, center=center, radius=radius)
             self.alert(scatter, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
-            yield dataset; count += 1
-            if self.count is not None and count >= self.count: break
+            yield dataset
 
     def tau(self, options):
         tau = np.sort(options["tau"].dropna().unique().astype(float))
@@ -180,8 +176,6 @@ class LocalCalculator(DatasetCalculator):
     def coverage(self): return self.__coverage
     @property
     def radius(self): return self.__radius
-    @property
-    def count(self): return self.__count
 
 
 class DatasetScreener(Alerting):
