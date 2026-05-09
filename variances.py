@@ -15,7 +15,7 @@ from scipy.spatial import cKDTree
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["VarianceCalculator", "VarianceScreener"]
+__all__ = ["VarianceCalculator", "VarianceScreener", "VariationCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -76,5 +76,51 @@ class VarianceScreener(Alerting):
     def neighbors(self): return self.__neighbors
     @property
     def threshold(self): return self.__threshold
+
+
+class VariationCalculator(Alerting):
+    def __init__(self, *args, neighbors=25, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__neighbors = neighbors
+
+    def __call__(self, options, surface, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        t = options["tau"].to_numpy(np.float64)
+        k = options["mae"].to_numpy(np.float64)
+        w = options["tiv"].to_numpy(np.float64)
+        variation = self.variation(t, k, w, surface)
+        variation = pd.Series(variation, name="zsr")
+        variation = pd.concat([options, variation], axis=1)
+        self.alert(variation, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
+        return variation
+
+    def variation(self, t, k, w, f):
+        n = self.neighbors
+        μ = self.average(t, k, w, f)
+        σ = self.deviation(t, k, w, n)
+        σ = np.fromiter(σ, dtype=np.float64)
+        ε = np.quantile(σ[σ > 0], 0.1) if np.any(σ > 0) else 1e-8
+        z = (w - μ) / np.maximum(σ, ε)
+        return z
+
+    @staticmethod
+    def average(t, k, w, f):
+        μ = np.vectorize(f)(t, k)
+        return w - μ
+
+    @staticmethod
+    def deviation(t, k, w, n):
+        t = t / np.std(t)
+        k = k / np.std(k)
+        tk = np.column_stack([t, k])
+        tree = cKDTree(tk)
+        _, ij = tree.query(tk, k=n)
+        for index in range(len(w)):
+            wij = w[ij[index]]
+            mad = np.median(np.abs(wij - np.median(wij)))
+            yield 1.4826 * mad
+
+    @property
+    def neighbors(self): return self.__neighbors
 
 

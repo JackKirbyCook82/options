@@ -64,7 +64,7 @@ class MarketCalculator(Equations, Alerting):
         assert isinstance(options, pd.DataFrame)
         markets = self.execute(options, *args, **kwargs)
         markets = pd.concat([options, markets], axis=1)
-        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
+        self.alert(markets, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return markets
 
 

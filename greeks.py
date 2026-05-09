@@ -150,7 +150,7 @@ class GreekCalculator(Alerting):
         greeks = dict(zip(["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"], greeks))
         greeks = pd.DataFrame(greeks)
         greeks = pd.concat([options, greeks], axis=1)
-        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
+        self.alert(greeks, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return greeks
 
 
