@@ -39,7 +39,7 @@ class NeighborhoodCalculator(ABC):
         _, ij = tree.query(tk, k=self.neighbors)
         for index in range(len(w)):
             wij = w[ij[index]]
-            yield 1.4826 * mad(wij)
+            yield 1.4826 * mad(wij) + 1e-12
 
     @property
     def neighbors(self): return self.__neighbors
@@ -50,14 +50,14 @@ class ScreeningCalculator(NeighborhoodCalculator):
         super().__init__(*args, **kwargs)
         self.__threshold = int(threshold)
 
-    def screen(self, options):
-        tau = options["tau"].to_numpy(dtype=float)
-        mae = options["mae"].to_numpy(dtype=float)
-        tiv = options["tiv"].to_numpy(dtype=float)
+    def screen(self, variance):
+        tau = variance["tau"].to_numpy(dtype=float)
+        mae = variance["mae"].to_numpy(dtype=float)
+        tiv = variance["tiv"].to_numpy(dtype=float)
         ntiv = self.neighborhood(tau, mae, tiv)
         ntiv = np.fromiter(ntiv, dtype=np.float64)
         mask = ntiv > self.threshold
-        return options.loc[~mask]
+        return variance.loc[~mask]
 
     @property
     def threshold(self): return self.__threshold
@@ -85,17 +85,15 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations, Ale
         return variance
 
 
-class StandardCalculator(NeighborhoodCalculator, CleaningCalculator, Alerting):
+class StandardCalculator(NeighborhoodCalculator, Alerting):
     def __call__(self, options, surface, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        options = self.clean(options)
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standard(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="ziv")
         standard = pd.concat([options, standard], axis=1)
-        standard = self.clean(standard)
         self.alert(standard, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return standard
 
