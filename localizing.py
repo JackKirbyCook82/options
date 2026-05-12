@@ -25,7 +25,7 @@ class Variables: tau: float; mae: float
 
 
 class LocalizingCalculator(Alerting):
-    def __init__(self, *args, quantity=15, coverage=Variables(tau=5, mae=10), radius=Variables(tau=0.15, mae=0.05), **kwargs):
+    def __init__(self, *args, quantity=35, coverage=Variables(tau=5, mae=10), radius=Variables(tau=0.15, mae=0.05), **kwargs):
         assert isinstance(radius, (tuple, Variables))
         super().__init__(*args, **kwargs)
         coverage = Variables(**dict(zip(["tau", "mae"], coverage))) if isinstance(coverage, tuple) else coverage

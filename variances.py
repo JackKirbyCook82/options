@@ -21,25 +21,39 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class NeighborhoodCalculator(ABC):
+class NeighborhoodCalculator(Alerting, ABC):
     def __init__(self, *args, neighbors=25, **kwargs):
         super().__init__(*args, **kwargs)
         self.__neighbors = int(neighbors)
 
     def neighborhood(self, t, k, w):
-        mad = lambda x: 1.4826 * np.median(np.abs(x - np.median(x))) + 1e-12
-        diff = lambda x: x - np.median(x)
-        t = np.asarray(t, dtype=float)
-        k = np.asarray(k, dtype=float)
+        t = self.independent(t)
+        k = self.independent(k)
         w = np.asarray(w, dtype=float)
-        t = diff(t) / mad(t)
-        k = diff(k) / mad(t)
         tk = np.column_stack([t, k])
         tree = cKDTree(tk)
-        _, ij = tree.query(tk, k=self.neighbors)
+        n = min(self.neighbors, len(w))
+        _, ij = tree.query(tk, k=n)
+        if n == 1: ij = ij[:, None]
         for index in range(len(w)):
             wij = w[ij[index]]
-            yield 1.4826 * mad(wij) + 1e-12
+            yield self.dependent(wij)
+
+    @staticmethod
+    def independent(x):
+        x = np.asarray(x, dtype=float)
+        center = np.median(x)
+        distance = np.abs(x - center)
+        scale = 1.4826 * np.median(distance)
+        return (x - center) / max(scale, 1e-12)
+
+    @staticmethod
+    def dependent(y):
+        x = np.asarray(y, dtype=float)
+        center = np.median(x)
+        distance = np.abs(x - center)
+        scale = 1.4826 * np.median(distance)
+        return scale + 1e-12
 
     @property
     def neighbors(self): return self.__neighbors
@@ -71,7 +85,7 @@ class CleaningCalculator(ABC):
         return options
 
 
-class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations, Alerting):
+class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
     mae = lambda forward, strike, option: np.log(forward / strike) * option.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
@@ -85,20 +99,20 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations, Ale
         return variance
 
 
-class StandardCalculator(NeighborhoodCalculator, Alerting):
+class StandardCalculator(NeighborhoodCalculator):
     def __call__(self, options, surface, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standard(tau, mae, tiv, surface)
-        standard = pd.Series(standard, name="ziv")
+        standard = pd.Series(standard, index=options.index, name="ziv")
         standard = pd.concat([options, standard], axis=1)
         self.alert(standard, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return standard
 
     def standard(self, t, k, w, f):
-        μ = np.vectorize(f)(t, k)
+        μ = np.vectorize(f.z)(t, k)
         σ = self.neighborhood(t, k, w)
         σ = np.fromiter(σ, dtype=np.float64)
         ε = np.quantile(σ[σ > 0], 0.1) if np.any(σ > 0) else 1e-8
