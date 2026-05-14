@@ -6,6 +6,7 @@ Created on Tues May 12 2026
 
 """
 
+import numpy as np
 import pandas as pd
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
@@ -18,6 +19,54 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["CalenderScanner", "FlyScanner"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+class Spread(ABC):
+    def __init__(self, strategy, spread):
+        self.__strategy = strategy
+        self.__spread = spread
+
+    @property
+    def gamma(self): return (self.spread["gamma"] * self.position * self.quantity).sum()
+    @property
+    def theta(self): return (self.spread["theta"] * self.position * self.quantity).sum()
+    @property
+    def vega(self): return (self.spread["vega"] * self.position * self.quantity).sum()
+    @property
+    def valuation(self): return (self.spread["value"] * self.position * self.quantity).sum()
+    @property
+    def market(self): return (self.spread["medium"] * self.position * self.quantity).sum()
+    @property
+    def efficiency(self): return np.abs(self.zscore) * self.edge / max(self.friction, 1e-12)
+    @property
+    def gap(self): return (self.spread["gap"] * self.quantity).sum()
+    @property
+    def edge(self): return self.valuation - self.market
+    @property
+    def friction(self): return self.gap / self.edge
+    @property
+    def position(self): return self.spread["position"].map(int)
+    @property
+    def quantity(self): return self.spread["quantity"]
+
+    @property
+    @abstractmethod
+    def zscore(self): pass
+    @property
+    def spread(self): return self.__spread
+
+
+class Fly(Spread):
+    @property
+    def zscore(self):
+        left, center, right = self.spread["zscore"].to_numpy()
+        return center - (left + right) / 2
+
+class Calender(Spread):
+    @property
+    def zscore(self):
+        far, near = self.spread["zscore"].to_numpy()
+        return far - near
 
 
 class Scanner(Alerting, ABC, metaclass=CounterMeta):
@@ -40,27 +89,7 @@ class Scanner(Alerting, ABC, metaclass=CounterMeta):
 
     def scanner(self, options, *args, **kwargs):
         for strategy, spread in self.generator(options, *args, **kwargs):
-
-            print(strategy)
-            print(spread)
-
-            position = spread["position"].map(int)
-            quantity = spread["quantity"]
-
-#            zscore = (spread["zscore"] - spread["zscore"].min()) * position + quantity
-
-            gamma = (spread["gamma"] * position * quantity).sum()
-            theta = (spread["theta"] * position * quantity).sum()
-            vega = (spread["vega"] * position * quantity).sum()
-            valuation = (spread["value"] * position * quantity).sum()
-            market = (spread["medium"] * position * quantity).sum()
-            gap = (spread["gap"] * quantity).sum()
-            edge = valuation - market
-            friction = gap / edge
-
-            [edge > self.edge, friction < self.friction, gamma < self.gamma, theta > self.theta, vega > self.vega]
-
-            raise Exception()
+            pass
 
     @abstractmethod
     def generator(self, options, *args, **kwargs): pass
