@@ -59,7 +59,7 @@ class MarketCalculator(Equations, Alerting):
     quality = lambda tightness, demand, supply: np.sqrt(1 + demand + supply) / (tightness ** 2 + 1e-6)
     mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
     median = lambda bid, ask: (bid + ask) / 2
-    spread = lambda bid, ask: ask - bid
+    gap = lambda bid, ask: ask - bid
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)

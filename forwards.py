@@ -26,14 +26,14 @@ class ForwardSampleError(ForwardError): pass
 
 
 class ForwardCalculator(Generator, Alerting):
-    def __init__(self, *args, weights, spreads, samplesize=5, **kwargs):
-        assert callable(weights) and callable(spreads)
-        assert self.arguments(weights) == ["spread", "supply", "demand"]
-        assert self.arguments(spreads) == ["spread", "spot"]
+    def __init__(self, *args, weights, gaps, samplesize=5, **kwargs):
+        assert callable(weights) and callable(gaps)
+        assert self.arguments(weights) == ["gap", "supply", "demand"]
+        assert self.arguments(gaps) == ["gap", "spot"]
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
-        self.__spreads = spreads
         self.__weights = weights
+        self.__gaps = gaps
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
@@ -52,11 +52,11 @@ class ForwardCalculator(Generator, Alerting):
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
                 samples = self.samples(options, *args, **kwargs)
-                spreads = self.spreads(samples["spread"], spot[0])
-                assert isinstance(spreads, (pd.Series, pd.DataFrame))
-                spreads = spreads.squeeze() if isinstance(spreads, pd.DataFrame) else spreads
-                samples = samples.where(spreads).dropna(how="all", inplace=False)
-                weights = self.weights(samples["supply"], samples["demand"], samples["spread"])
+                gaps = self.gaps(samples["gap"], spot[0])
+                assert isinstance(gaps, (pd.Series, pd.DataFrame))
+                gaps = gaps.squeeze() if isinstance(gaps, pd.DataFrame) else gaps
+                samples = samples.where(gaps).dropna(how="all", inplace=False)
+                weights = self.weights(samples["gap"], samples["supply"], samples["demand"])
                 if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, *args, **constants, **kwargs)
                     options = options.assign(**forwards)
@@ -96,16 +96,16 @@ class ForwardCalculator(Generator, Alerting):
 
     @staticmethod
     def samples(options, *args, **kwargs):
-        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "spread", "supply", "demand"], sort=False).sort_index()
+        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "gap", "supply", "demand"], sort=False).sort_index()
         if set(Concepts.Securities.Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
-        validity = [samples[index].notna() for index in list(product(["median", "spread"], list(Concepts.Securities.Option)))]
+        validity = [samples[index].notna() for index in list(product(["median", "gap"], list(Concepts.Securities.Option)))]
         samples = samples[np.logical_and.reduce(validity)]
         difference = (samples["median", Concepts.Securities.Option.CALL] - samples["median", Concepts.Securities.Option.PUT]).rename("difference")
-        spread = (samples["spread", Concepts.Securities.Option.CALL] + samples["spread", Concepts.Securities.Option.PUT]).rename("spread")
         supply = (samples["supply", Concepts.Securities.Option.CALL] + samples["supply", Concepts.Securities.Option.PUT]).rename("supply")
         demand = (samples["demand", Concepts.Securities.Option.CALL] + samples["demand", Concepts.Securities.Option.PUT]).rename("demand")
+        gap = (samples["gap", Concepts.Securities.Option.CALL] + samples["gap", Concepts.Securities.Option.PUT]).rename("gap")
         strike = samples.index.get_level_values("strike").to_series(index=samples.index)
-        samples = pd.concat([strike, difference, spread, supply, demand], axis=1)
+        samples = pd.concat([strike, difference, gap, supply, demand], axis=1)
         samples = samples.reset_index(drop=True, inplace=False)
         return samples
 
@@ -126,7 +126,7 @@ class ForwardCalculator(Generator, Alerting):
     @property
     def weights(self): return self.__weights
     @property
-    def spreads(self): return self.__spreads
+    def gaps(self): return self.__gaps
 
 
 

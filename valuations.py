@@ -49,7 +49,7 @@ def valid(x, k, τ, i, r, q):
     return positive and option and finite
 
 @njit(cache=True, inline="always")
-def blackscholes(x, k, τ, σ, i, r, q):
+def value(x, k, τ, σ, i, r, q):
     if not valid(x, k, τ, i, r, q) or σ <= 0.0 or not math.isfinite(σ): return math.nan
     zx = zitm(x, k, τ, σ, r, q)
     zk = zx - σ * math.sqrt(τ)
@@ -60,7 +60,7 @@ def blackscholes(x, k, τ, σ, i, r, q):
 def calculation(x, k, τ, σ, i, r, q):
     y = np.empty(len(x), dtype=np.float64)
     for idx in range(len(x)):
-        y[idx] = blackscholes(x[idx], k[idx], τ[idx], σ[idx], i[idx], r, q)
+        y[idx] = value(x[idx], k[idx], τ[idx], σ[idx], i[idx], r, q)
     return y
 
 
@@ -73,7 +73,7 @@ class ValuationCalculator(Alerting):
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
         valuation = calculation(x, k, τ, σ, i, float(interest), float(dividends))
-        valuation = pd.Series(valuation, name="blackscholes")
+        valuation = pd.Series(valuation, name="value")
         valuation = pd.concat([options, valuation], axis=1)
         self.alert(valuation, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return valuation

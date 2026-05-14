@@ -43,6 +43,23 @@ class Scanner(Alerting, ABC, metaclass=CounterMeta):
 
             print(strategy)
             print(spread)
+
+            position = spread["position"].map(int)
+            quantity = spread["quantity"]
+
+#            zscore = (spread["zscore"] - spread["zscore"].min()) * position + quantity
+
+            gamma = (spread["gamma"] * position * quantity).sum()
+            theta = (spread["theta"] * position * quantity).sum()
+            vega = (spread["vega"] * position * quantity).sum()
+            valuation = (spread["value"] * position * quantity).sum()
+            market = (spread["medium"] * position * quantity).sum()
+            gap = (spread["gap"] * quantity).sum()
+            edge = valuation - market
+            friction = gap / edge
+
+            [edge > self.edge, friction < self.friction, gamma < self.gamma, theta > self.theta, vega > self.vega]
+
             raise Exception()
 
     @abstractmethod

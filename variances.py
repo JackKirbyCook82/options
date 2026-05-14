@@ -106,7 +106,7 @@ class StandardCalculator(NeighborhoodCalculator):
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standard(tau, mae, tiv, surface)
-        standard = pd.Series(standard, index=options.index, name="ziv")
+        standard = pd.Series(standard, index=options.index, name="zscore")
         standard = pd.concat([options, standard], axis=1)
         self.alert(standard, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
         return standard
