@@ -52,6 +52,9 @@ class Spread(ABC):
     @property
     @abstractmethod
     def zscore(self): pass
+
+    @property
+    def strategy(self): return self.__strategy
     @property
     def spread(self): return self.__spread
 
