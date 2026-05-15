@@ -148,7 +148,9 @@ class Scanner(Alerting, ABC):
 
     def scanner(self, options, *args, **kwargs):
         for spread in self.generator(options, *args, **kwargs):
-            yield spread(self.metrics, *args, **kwargs)
+            prospects = spread(self.metrics, *args, **kwargs)
+            if prospects is None: continue
+            yield prospects
 
     @abstractmethod
     def generator(self, options, *args, **kwargs): pass
