@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tues May 12 2026
-@name:   Option Prospects Objects
+@name:   Option Prospect Objects
 @author: Jack Kirby Cook
 
 """
