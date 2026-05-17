@@ -11,6 +11,7 @@ import pandas as pd
 from typing import Optional
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from functools import total_ordering
 
 from support.meta import CounterMeta, RegistryMeta
 from support.finance import Concepts
@@ -22,21 +23,61 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
+@total_ordering
 @dataclass(frozen=True)
-class Ratios: gap: float; theta: Optional[float] = None
+class Profit:
+    valuation: float; market: float
+
+    def __lt__(self, other): return float(self) < float(other)
+    def __float__(self): return self.valuation - self.market
+
+@total_ordering
+@dataclass(frozen=True)
+class Quality:
+    zscore: float; gap: float; profit: Profit
+
+    def __lt__(self, other): return float(self) < float(other)
+    def __float__(self): return np.abs(self.zscore) * float(self.profit) / max(self.gap, 1e-12)
+
+@total_ordering
+@dataclass(frozen=True)
+class Risk:
+    gamma: float; theta: float; vega: float
+
+    def __lt__(self, other): return float(self) < float(other)
+    def __float__(self): return abs(self.gamma) + abs(self.vega) + max(0.0, -self.theta)
+
+@total_ordering
+@dataclass(frozen=True)
+class Score:
+    profit: Profit; quality: Quality; risk: Risk
+
+    def __lt__(self, other): return float(self) < float(other)
+    def __float__(self):
+        zscore = abs(self.quality.zscore)
+        edge = max(float(self.profit), 1e-12)
+        gap = float(self.quality.gap) / edge
+        theta = abs(self.risk.theta) / edge
+        gamma = abs(self.risk.gamma) / edge
+        vega = abs(self.risk.vega) / edge
+        return zscore - 1.5 * gap + 0.5 * theta - 0.5 * gamma - 0.25 * vega
+
 
 @dataclass(frozen=True)
-class Metrics:
-    gamma: Optional[float]; theta: Optional[float]; vega: Optional[float]
-    ratios: Ratios; zscore: float; profit: float; quality: float
+class Ratios:
+    gamma: Optional[float] = None; theta: Optional[float] = None; vega: Optional[float] = None
+    gap: Optional[float] = None
+
+@dataclass(frozen=True)
+class Metrics: ratios: Ratios; zscore: float; edge: float
 
 
 class SpreadMeta(CounterMeta, RegistryMeta): pass
 class Spread(ABC, metaclass=SpreadMeta):
     def __init__(self, legs, *args, **kwargs):
         assert isinstance(legs, pd.DataFrame)
-        self.__legs = self.create(legs, *args, **kwargs)
         self.__identity = type(self).counter
+        self.__legs = legs
 
 #    def __call__(self, metrics, *args, **kwargs):
 #        columns = ["identity"] + list(self.legs.columns)
@@ -45,23 +86,25 @@ class Spread(ABC, metaclass=SpreadMeta):
 #        prospects = self.legs.assign(identity=identity)
 #        return prospects
 
-    def qualify(self, metrics):
-        assert isinstance(metrics, Metrics)
-        if self.profit < metrics.profit: return False
-        ratios = all([self.ratios.gap <= metrics.ratios.gap, self.ratios.theta >= metrics.ratios.theta])
-        zscore = abs(self.zscore) >= abs(metrics.zscore)
-        quality = self.quality >= metrics.quality
-        gamma = True if metrics.gamma is None else abs(self.gamma) <= abs(metrics.gamma)
-        theta = True if metrics.theta is None else self.theta >= metrics.theta
-        vega = True if metrics.vega is None else self.vega > metrics.vega
-        return all([ratios, zscore, quality, gamma, theta, vega])
+#    def qualify(self, metrics):
+#        assert isinstance(metrics, Metrics)
+#        if self.profit < metrics.profit: return False
+#        ratios = all([self.ratios.gap <= metrics.ratios.gap, self.ratios.theta >= metrics.ratios.theta])
+#        zscore = abs(self.zscore) >= abs(metrics.zscore)
+#        quality = self.quality >= metrics.quality
+#        gamma = True if metrics.gamma is None else abs(self.gamma) <= abs(metrics.gamma)
+#        theta = True if metrics.theta is None else self.theta >= metrics.theta
+#        vega = True if metrics.vega is None else self.vega > metrics.vega
+#        return all([ratios, zscore, quality, gamma, theta, vega])
 
     @property
-    def profit(self): return self.valuation - self.market
+    def score(self): return Score(self.profit, self.quality, self.risk)
     @property
-    def quality(self): return np.abs(self.zscore) * self.profit / max(self.gap, 1e-12)
+    def profit(self): return Profit(self.valuation, self.market)
     @property
-    def risk(self): return abs(self.gamma) + abs(self.vega) + max(0, -self.theta)
+    def quality(self): return Quality(self.zscore, self.gap, self.profit)
+    @property
+    def risk(self): return Risk(self.gamma, self.theta, self.vega)
 
     @property
     def gamma(self): return (self.legs["gamma"] * self.position * self.quantity).sum()
@@ -83,16 +126,8 @@ class Spread(ABC, metaclass=SpreadMeta):
     def quantity(self): return self.legs["quantity"]
 
     @property
-    def ratios(self):
-        gap = self.gap / max(self.profit, 1e-12)
-        theta = self.theta / max(self.profit, 1e-12)
-        return Ratios(gap=gap, theta=theta)
-
-    @property
     @abstractmethod
     def zscore(self): pass
-    @abstractmethod
-    def create(self, dataframe, *args, position, quantity=1, **kwargs): pass
 
     @property
     def identity(self): return self.__identity
@@ -101,15 +136,6 @@ class Spread(ABC, metaclass=SpreadMeta):
 
 
 class Fly(Spread, register=Concepts.Strategies.Spread.FLY):
-    def create(self, legs, *args, position, quantity=1, **kwargs):
-        assert len(legs) == 3
-        legs = legs.sort_values("strike")
-        hedge = Concepts.Securities.Position(-int(position))
-        legs["quantity"] = list(map(lambda x: x * quantity, [1, 2, 1]))
-        legs["position"] = [hedge, position, hedge]
-        legs["spread"] = Concepts.Strategies.Spread.FLY
-        return legs
-
     @property
     def zscore(self):
         left, center, right = self.legs["zscore"].to_numpy()
@@ -117,15 +143,6 @@ class Fly(Spread, register=Concepts.Strategies.Spread.FLY):
 
 
 class Calender(Spread, register=Concepts.Strategies.Spread.CALENDAR):
-    def create(self, legs, *args, position, quantity=1, **kwargs):
-        assert len(legs) == 2
-        legs = legs.sort_values("dte")
-        hedge = Concepts.Securities.Position(-int(position))
-        legs["quantity"] = list(map(lambda x: x * quantity, [1, 1]))
-        legs["position"] = [hedge, position]
-        legs["spread"] = Concepts.Strategies.Spread.CALENDAR
-        return legs
-
     @property
     def zscore(self):
         near, far = self.legs["zscore"].to_numpy()
