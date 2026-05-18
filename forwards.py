@@ -44,6 +44,7 @@ class ForwardCalculator(Generator, Alerting):
         return forward
 
     def generator(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
         for (ticker, expire), options in options.groupby(["ticker", "expire"]):
             spot = options["spot"].dropna(inplace=False).to_numpy()
             tau = options["tau"].dropna(inplace=False).to_numpy()

@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from functools import total_ordering
 
-from support.meta import CounterMeta, RegistryMeta
-from support.finance import Concepts
+from support.finance import Concepts, Alerting
+from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["Spread", "Metrics", "Ratios"]
+__all__ = ["SpreadCalculator", "Metrics", "Ratios"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -72,30 +72,14 @@ class Ratios:
 class Metrics: ratios: Ratios; zscore: float; edge: float
 
 
-class SpreadMeta(CounterMeta, RegistryMeta): pass
+class SpreadMeta(RegistryMeta): pass
 class Spread(ABC, metaclass=SpreadMeta):
-    def __init__(self, legs, *args, **kwargs):
+    def __init__(self, legs):
         assert isinstance(legs, pd.DataFrame)
-        self.__identity = type(self).counter
+        tickers = "|".join(list(legs["ticker"].unique()))
+        assert len(tickers) == 1
+        self.__ticker = str(tickers[0])
         self.__legs = legs
-
-#    def __call__(self, metrics, *args, **kwargs):
-#        columns = ["identity"] + list(self.legs.columns)
-#        if not self.qualify(metrics): return pd.DataFrame(columns=columns)
-#        identity = type(self).counter
-#        prospects = self.legs.assign(identity=identity)
-#        return prospects
-
-#    def qualify(self, metrics):
-#        assert isinstance(metrics, Metrics)
-#        if self.profit < metrics.profit: return False
-#        ratios = all([self.ratios.gap <= metrics.ratios.gap, self.ratios.theta >= metrics.ratios.theta])
-#        zscore = abs(self.zscore) >= abs(metrics.zscore)
-#        quality = self.quality >= metrics.quality
-#        gamma = True if metrics.gamma is None else abs(self.gamma) <= abs(metrics.gamma)
-#        theta = True if metrics.theta is None else self.theta >= metrics.theta
-#        vega = True if metrics.vega is None else self.vega > metrics.vega
-#        return all([ratios, zscore, quality, gamma, theta, vega])
 
     @property
     def score(self): return Score(self.profit, self.quality, self.risk)
@@ -130,23 +114,136 @@ class Spread(ABC, metaclass=SpreadMeta):
     def zscore(self): pass
 
     @property
-    def identity(self): return self.__identity
+    def ticker(self): return self.__ticker
     @property
     def legs(self): return self.__legs
 
 
-class Fly(Spread, register=Concepts.Strategies.Spread.FLY):
+class FlySpread(Spread, register=Concepts.Strategies.Spread.FLY):
     @property
     def zscore(self):
         left, center, right = self.legs["zscore"].to_numpy()
         return center - (left + right) / 2
 
 
-class Calender(Spread, register=Concepts.Strategies.Spread.CALENDAR):
+class CalenderSpread(Spread, register=Concepts.Strategies.Spread.CALENDAR):
     @property
     def zscore(self):
         near, far = self.legs["zscore"].to_numpy()
         return far - near
+
+
+class SpreadGenerator(ABC, metaclass=RegistryMeta):
+    def __init__(self, limit=1): self.limit = limit
+    def __call__(self, options):
+        assert isinstance(options, pd.DataFrame)
+        securities = self.securities(options)
+        organized = self.organizer(securities)
+        for security, dataframe in organized:
+            limit, length = int(self.limit), len(dataframe.index)
+            locators = self.locators(limit, length)
+            for locator in locators:
+                located = dataframe.iloc[locator]
+                selected = self.selector(security, located)
+                yield selected
+
+    @staticmethod
+    def securities(options):
+        for position in iter(Concepts.Securities.Position):
+            for option in iter(Concepts.Securities.Option):
+                security = [Concepts.Securities.Instrument.OPTION, option, position]
+                security = Concepts.Securities.Security(security)
+                dataframe = options[options["option"].eq(option)]
+                yield security, dataframe
+
+    @staticmethod
+    @abstractmethod
+    def organizer(securities): pass
+    @staticmethod
+    @abstractmethod
+    def locators(limit, length): pass
+    @staticmethod
+    @abstractmethod
+    def selector(security, located): pass
+
+
+class FlyGenerator(SpreadGenerator, register=Concepts.Strategies.Spread.FLY):
+    @staticmethod
+    def organizer(securities):
+        for security, dataframes in securities:
+            for dte, dataframe in dataframes.groupby("dte"):
+                dataframe = dataframe.sort_values("strike")
+                yield security, dataframe
+
+    @staticmethod
+    def locators(limit, length):
+        for section in range(1, limit + 1):
+            for left in range(length - 2 * section):
+                center = left + section
+                right = left + section * 2
+                yield [left, center, right]
+
+    @staticmethod
+    def selector(security, located):
+        position = security.position
+        hedge = Concepts.Securities.Position(-int(position))
+        located["spread"] = Concepts.Strategies.Spread.FLY
+        located["position"] = [hedge, position, hedge]
+        located["quantity"] = [1, 2, 1]
+        spread = Spread[Concepts.Strategies.Spread.FLY](located)
+        yield spread
+
+
+class CalendarGenerator(SpreadGenerator, register=Concepts.Strategies.Spread.CALENDAR):
+    @staticmethod
+    def organizer(securities):
+        for security, dataframes in securities:
+            for strike, dataframe in dataframes.groupby("strike"):
+                dataframe = dataframe.sort_values("dte")
+                yield security, dataframe
+
+    @staticmethod
+    def locators(limit, length):
+        for section in range(1, limit + 1):
+            for near in range(length - section):
+                far = near + section
+                yield [near, far]
+
+    @staticmethod
+    def selector(security, located):
+        position = security.position
+        hedge = Concepts.Securities.Position(-int(position))
+        located["spread"] = Concepts.Strategies.Spread.CALENDAR
+        located["position"] = [hedge, position]
+        located["quantity"] = [1, 1]
+        spread = Spread[Concepts.Strategies.Spread.CALENDAR](located)
+        yield spread
+
+
+class SpreadCalculator(Alerting):
+    def __init__(self, *args, spreads, limit=1, **kwargs):
+        assert isinstance(limit, int) and limit > 0
+        super().__init__(*args, **kwargs)
+        spreads = [Concepts.Strategies.Spread[str(spread).upper()] for spread in spreads]
+        spreads = {spread: SpreadGenerator[spread](limit=limit) for spread in spreads}
+        self.__spreads = spreads
+
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        generator = self.generator(options, *args, **kwargs)
+        spreads = list(generator)
+        sizes = dict(previous=len(options), post=len(spreads))
+        self.alert(spreads, title="Calculator", instrument=Concepts.Securities.Instrument.OPTION, **sizes)
+        return spreads
+
+    def generator(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        for spreads in self.spreads.values():
+            for spread in spreads(options):
+                yield spread
+
+    @property
+    def spreads(self): return self.__spreads
 
 
 

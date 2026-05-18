@@ -16,5 +16,6 @@ __license__ = "MIT License"
 
 
 class PriorityCalculator(Alerting):
-    pass
+    def __call__(self, spread, *args, **kwargs):
+        pass
 

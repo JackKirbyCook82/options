@@ -41,87 +41,45 @@ class Scanner(ABC, metaclass=RegistryMeta):
     def metrics(self): return self.__metrics
 
 
-class FlyScanner(Scanner, register=Concepts.Strategies.Spread.FLY):
-    def selector(self, length):
-        for width in range(1, self.proximity + 1):
-            for left in range(length - 2 * width):
-                center = left + width
-                right = left + width * 2
-                yield [left, center, right]
+#    def __call__(self, metrics, *args, **kwargs):
+#        columns = ["identity"] + list(self.legs.columns)
+#        if not self.qualify(metrics): return pd.DataFrame(columns=columns)
+#        identity = type(self).counter
+#        prospects = self.legs.assign(identity=identity)
+#        return prospects
 
-    def generator(self, options):
-        for position in iter(Concepts.Securities.Position):
-            hedge = Concepts.Securities.Position(-int(position))
-            for option in iter(Concepts.Securities.Option):
-                dataframes = options[options["option"].eq(option)]
-                for dte, dataframe in dataframes.groupby("dte"):
-                    dataframe = dataframe.sort_values("strike")
-                    for index in self.selector(len(dataframe)):
-                        legs = dataframe.iloc[index]
-                        legs["spread"] = Concepts.Strategies.Spread.FLY
-                        legs["position"] = [hedge, position, hedge]
-                        legs["quantity"] = [1, 2, 1]
-                        yield legs
-
-
-class CalenderScanner(Scanner, Concepts.Strategies.Spread.CALENDER):
-    def selector(self, length):
-        for width in range(1, self.proximity + 1):
-            for near in range(length - width):
-                far = near + width
-                yield [near, far]
-
-    def generator(self, options):
-        for position in iter(Concepts.Securities.Position):
-            hedge = Concepts.Securities.Position(-int(position))
-            for option in iter(Concepts.Securities.Option):
-                dataframes = options[options["option"].eq(option)]
-                for strike, dataframe in dataframes.groupby("strike"):
-                    dataframe = dataframe.sort_values("dte")
-                    for index in self.selector(len(dataframe)):
-                        legs = dataframe.iloc[index]
-                        legs["spread"] = Concepts.Strategies.Spread.CALENDAR
-                        legs["position"] = [hedge, position]
-                        legs["quantity"] = [1, 1]
-                        yield legs
+#    def qualify(self, metrics):
+#        assert isinstance(metrics, Metrics)
+#        if self.profit < metrics.profit: return False
+#        ratios = all([self.ratios.gap <= metrics.ratios.gap, self.ratios.theta >= metrics.ratios.theta])
+#        zscore = abs(self.zscore) >= abs(metrics.zscore)
+#        quality = self.quality >= metrics.quality
+#        gamma = True if metrics.gamma is None else abs(self.gamma) <= abs(metrics.gamma)
+#        theta = True if metrics.theta is None else self.theta >= metrics.theta
+#        vega = True if metrics.vega is None else self.vega > metrics.vega
+#        return all([ratios, zscore, quality, gamma, theta, vega])
 
 
 class ProspectCalculator(Alerting):
-    def __init__(self, *args, metrics, proximity=1, **kwargs):
-        assert isinstance(proximity, int) and proximity >= 1
+    def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
         metrics = {Concepts.Strategies.Spread[str(key).upper()]: value for key, value in metrics.items()}
-        scanners = [Scanner[key](proximity=proximity, metrics=value) for key, value in metrics.items()]
-        self.__proximity = int(proximity)
-        self.__scanners = scanners
+        self.__metrics = metrics
 
     def __call__(self, options, *args, **kwargs):
-        pass
-
-#    def __call__(self, options, *args, **kwargs):
-#        assert isinstance(options, pd.DataFrame)
-#        prospects = self.scanner(options, *args, **kwargs)
-#        prospects = list(prospects)
-#        if bool(prospects): prospects = pd.concat(prospects, axis=0)
-#        else: prospects = pd.DataFrame(columns=options.columns)
-#        prospects = prospects.sort_values(by=["identity"], ascending=True, inplace=False)
-#        prospects = prospects.reset_index(drop=True, inplace=False)
-#        sizes = dict(previous=len(options), post=len(prospects))
-#        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION, **sizes)
-#        return prospects
-#
-#    def scanner(self, options, *args, **kwargs):
-#        for scanner in self.scanners:
-#            generator = scanner(options, *args, **kwargs)
-#            yield from generator
+        assert isinstance(options, pd.DataFrame)
+        prospects = self.scanner(options, *args, **kwargs)
+        prospects = list(prospects)
+        if bool(prospects): prospects = pd.concat(prospects, axis=0)
+        else: prospects = pd.DataFrame(columns=options.columns)
+        prospects = prospects.sort_values(by=["identity"], ascending=True, inplace=False)
+        prospects = prospects.reset_index(drop=True, inplace=False)
+        sizes = dict(previous=len(options), post=len(prospects))
+        self.alert(options, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION, **sizes)
+        return prospects
 
     @property
-    def proximity(self): return self.__proximity
-    @property
-    def scanners(self): return self.__scanners
-
-
-
+    def metrics(self): return self.__metrics
 
 
 
