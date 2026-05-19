@@ -57,7 +57,7 @@ class Score:
         zscore = abs(self.quality.zscore)
         edge = max(float(self.profit), 1e-12)
         gap = float(self.quality.gap) / edge
-        theta = abs(self.risk.theta) / edge
+        theta = self.risk.theta / edge
         gamma = abs(self.risk.gamma) / edge
         vega = abs(self.risk.vega) / edge
         return zscore - 1.5 * gap + 0.5 * theta - 0.5 * gamma - 0.25 * vega
@@ -76,9 +76,11 @@ class SpreadMeta(RegistryMeta): pass
 class Spread(ABC, metaclass=SpreadMeta):
     def __init__(self, legs):
         assert isinstance(legs, pd.DataFrame)
-        tickers = "|".join(list(legs["ticker"].unique()))
-        assert len(tickers) == 1
+        tickers = list(legs["ticker"].unique())
+        types = list(legs["spread"].unique())
+        assert len(tickers) == 1 and len(types) == 1
         self.__ticker = str(tickers[0])
+        self.__type = types[0]
         self.__legs = legs
 
     @property
@@ -105,6 +107,14 @@ class Spread(ABC, metaclass=SpreadMeta):
     def gap(self): return (self.legs["gap"] * self.quantity).sum()
 
     @property
+    def ratios(self):
+        gamma = self.gamma / max(float(self.profit), 1e-12)
+        theta = self.theta / max(float(self.profit), 1e-12)
+        vega = self.vega / max(float(self.profit), 1e-12)
+        gap = self.gap / max(float(self.profit), 1e-12)
+        return Ratios(gamma=gamma, theta=theta, vega=vega, gap=gap)
+
+    @property
     def position(self): return self.legs["position"].map(int)
     @property
     def quantity(self): return self.legs["quantity"]
@@ -117,6 +127,8 @@ class Spread(ABC, metaclass=SpreadMeta):
     def ticker(self): return self.__ticker
     @property
     def legs(self): return self.__legs
+    @property
+    def type(self): return self.__type
 
 
 class FlySpread(Spread, register=Concepts.Strategies.Spread.FLY):
@@ -133,7 +145,7 @@ class CalenderSpread(Spread, register=Concepts.Strategies.Spread.CALENDAR):
         return far - near
 
 
-class SpreadGenerator(ABC, metaclass=RegistryMeta):
+class SpreadCreator(ABC, metaclass=RegistryMeta):
     def __init__(self, limit=1): self.limit = limit
     def __call__(self, options):
         assert isinstance(options, pd.DataFrame)
@@ -143,7 +155,7 @@ class SpreadGenerator(ABC, metaclass=RegistryMeta):
             limit, length = int(self.limit), len(dataframe.index)
             locators = self.locators(limit, length)
             for locator in locators:
-                located = dataframe.iloc[locator]
+                located = dataframe.iloc[locator].copy()
                 selected = self.selector(security, located)
                 yield selected
 
@@ -167,7 +179,7 @@ class SpreadGenerator(ABC, metaclass=RegistryMeta):
     def selector(security, located): pass
 
 
-class FlyGenerator(SpreadGenerator, register=Concepts.Strategies.Spread.FLY):
+class FlyCreator(SpreadCreator, register=Concepts.Strategies.Spread.FLY):
     @staticmethod
     def organizer(securities):
         for security, dataframes in securities:
@@ -194,7 +206,7 @@ class FlyGenerator(SpreadGenerator, register=Concepts.Strategies.Spread.FLY):
         yield spread
 
 
-class CalendarGenerator(SpreadGenerator, register=Concepts.Strategies.Spread.CALENDAR):
+class CalendarCreator(SpreadCreator, register=Concepts.Strategies.Spread.CALENDAR):
     @staticmethod
     def organizer(securities):
         for security, dataframes in securities:
@@ -225,25 +237,25 @@ class SpreadCalculator(Alerting):
         assert isinstance(limit, int) and limit > 0
         super().__init__(*args, **kwargs)
         spreads = [Concepts.Strategies.Spread[str(spread).upper()] for spread in spreads]
-        spreads = {spread: SpreadGenerator[spread](limit=limit) for spread in spreads}
-        self.__spreads = spreads
+        creators = {spread: SpreadCreator[spread](limit=limit) for spread in spreads}
+        self.__creators = creators
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        generator = self.generator(options, *args, **kwargs)
+        generator = self.calculator(options, *args, **kwargs)
         spreads = list(generator)
         sizes = dict(previous=len(options), post=len(spreads))
         self.alert(spreads, title="Calculator", instrument=Concepts.Securities.Instrument.OPTION, **sizes)
         return spreads
 
-    def generator(self, options, *args, **kwargs):
+    def calculator(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        for spreads in self.spreads.values():
-            for spread in spreads(options):
+        for creator in self.creators.values():
+            for spread in creator(options):
                 yield spread
 
     @property
-    def spreads(self): return self.__spreads
+    def creators(self): return self.__creators
 
 
 
