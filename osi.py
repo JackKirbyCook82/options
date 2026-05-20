@@ -7,6 +7,7 @@ Created on Mon Mar 23 2026
 """
 
 import regex as re
+import pandas as pd
 from enum import Enum
 from datetime import date as Date
 from datetime import datetime as Datetime
@@ -32,6 +33,7 @@ class OptionOSI:
     @classmethod
     def create(cls, contents):
         if isinstance(contents, Querys.Contract): contents = dict(contents.items())
+        if isinstance(contents, pd.Series): contents = contents.to_dict()
         if isinstance(contents, dict): return cls(**{field.name: contents[field.name] for field in fields(cls)})
         elif isinstance(contents, str): return cls(*cls.parse(contents))
         elif isinstance(contents, (list, tuple)): return cls(*contents)

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from functools import total_ordering
 
+from options.osi import OptionOSI
 from support.finance import Concepts, Alerting
 from support.meta import RegistryMeta
 
@@ -82,6 +83,11 @@ class Spread(ABC, metaclass=SpreadMeta):
         self.__ticker = str(tickers[0])
         self.__type = types[0]
         self.__legs = legs
+
+    @property
+    def osi(self): return self.legs[["ticker", "expire", "option", "strike"]].apply(OptionOSI.create, axis=1)
+    @property
+    def cost(self): return (self.legs["median"] * self.position * self.quantity).sum()
 
     @property
     def score(self): return Score(self.profit, self.quality, self.risk)
