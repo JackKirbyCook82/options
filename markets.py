@@ -11,7 +11,6 @@ import pandas as pd
 from abc import ABC
 from datetime import date as Date
 
-from support.finance import Concepts, Alerting
 from support.equations import Equations
 from support.calculations import Filter
 

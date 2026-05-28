@@ -10,8 +10,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 
-from support.concepts import NumRange
-from support.finance import Concepts, Alerting
+from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"

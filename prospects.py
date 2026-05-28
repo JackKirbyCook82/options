@@ -6,8 +6,6 @@ Created on Tues May 12 2026
 
 """
 
-from support.finance import Concepts, Alerting
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["ProspectCalculator", "PriorityCalculator"]
@@ -18,7 +16,7 @@ __license__ = "MIT License"
 class ProspectCalculator(Alerting):
     def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
-        metrics = {Concepts.Strategies.Spread[str(key).upper()]: value for key, value in metrics.items()}
+ #       metrics = {Concepts.Strategies.Spread[str(key).upper()]: value for key, value in metrics.items()}
         self.__metrics = metrics
 
     def __call__(self, spreads, *args, **kwargs):

@@ -14,7 +14,6 @@ from abc import ABC, abstractmethod
 from functools import total_ordering
 
 from options.osi import OptionOSI
-from support.finance import Concepts, Alerting
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -170,7 +169,7 @@ class SpreadCreator(ABC, metaclass=RegistryMeta):
         for position in iter(Concepts.Securities.Position):
             for option in iter(Concepts.Securities.Option):
                 security = [Concepts.Securities.Instrument.OPTION, option, position]
-                security = Concepts.Securities.Security(security)
+#                security = Concepts.Securities.Security(security)
                 dataframe = options[options["option"].eq(option)]
                 yield security, dataframe
 
@@ -204,7 +203,7 @@ class FlyCreator(SpreadCreator, register=Concepts.Strategies.Spread.FLY):
     @staticmethod
     def selector(security, located):
         position = security.position
-        hedge = Concepts.Securities.Position(-int(position))
+#        hedge = Concepts.Securities.Position(-int(position))
         located["spread"] = Concepts.Strategies.Spread.FLY
         located["position"] = [hedge, position, hedge]
         located["quantity"] = [1, 2, 1]
@@ -230,7 +229,7 @@ class CalendarCreator(SpreadCreator, register=Concepts.Strategies.Spread.CALENDA
     @staticmethod
     def selector(security, located):
         position = security.position
-        hedge = Concepts.Securities.Position(-int(position))
+#        hedge = Concepts.Securities.Position(-int(position))
         located["spread"] = Concepts.Strategies.Spread.CALENDAR
         located["position"] = [hedge, position]
         located["quantity"] = [1, 1]
@@ -242,7 +241,7 @@ class SpreadCalculator(Alerting):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         assert isinstance(limit, int) and limit > 0
         super().__init__(*args, **kwargs)
-        spreads = [Concepts.Strategies.Spread[str(spread).upper()] for spread in spreads]
+#        spreads = [Concepts.Strategies.Spread[str(spread).upper()] for spread in spreads]
         creators = {spread: SpreadCreator[spread](limit=limit) for spread in spreads}
         self.__creators = creators
 

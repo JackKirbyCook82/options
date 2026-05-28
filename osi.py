@@ -13,8 +13,6 @@ from datetime import date as Date
 from datetime import datetime as Datetime
 from dataclasses import dataclass, asdict, fields
 
-from support.finance import Concepts, Querys
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["OptionOSI"]
@@ -59,7 +57,7 @@ class OptionOSI:
         values = match.groupdict()
         ticker = values["ticker"].upper()
         expire = Datetime.strptime(values["expire"], "%y%m%d").date()
-        option = {str(option).upper()[0]: option for option in Concepts.Securities.Option}[values["option"]]
+#        option = {str(option).upper()[0]: option for option in Concepts.Securities.Option}[values["option"]]
         strike = int(values["strike"]) / 1000.0
         return [ticker, expire, option, strike]
 
