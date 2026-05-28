@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
+from finance.variables import Alerting, Concepts
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["VolatilityCalculator"]
@@ -181,7 +183,7 @@ class VolatilityCalculator(Alerting):
         volatility = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         volatility = pd.Series(volatility, name="implied")
         volatility = pd.concat([options, volatility], axis=1)
-        self.alert(volatility, title="Calculated", instrument=Concepts.Securities.Instrument.OPTION)
+        self.alert(volatility, title="Calculated", instrument=Concepts.Instrument.OPTION)
         return volatility
 
     @property

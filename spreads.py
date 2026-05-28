@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from functools import total_ordering
 
-from options.osi import OptionOSI
+from finance.variables import Alerting, Variables, Concepts, OSI
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -84,7 +84,7 @@ class Spread(ABC, metaclass=SpreadMeta):
         self.__legs = legs
 
     @property
-    def osi(self): return self.legs[["ticker", "expire", "option", "strike"]].apply(OptionOSI.create, axis=1)
+    def osi(self): return self.legs[["ticker", "expire", "option", "strike"]].apply(OSI.create, axis=1)
     @property
     def cost(self): return (self.legs["median"] * self.position * self.quantity).sum()
 
@@ -136,14 +136,14 @@ class Spread(ABC, metaclass=SpreadMeta):
     def type(self): return self.__type
 
 
-class FlySpread(Spread, register=Concepts.Strategies.Spread.FLY):
+class FlySpread(Spread, register=Concepts.Spread.FLY):
     @property
     def zscore(self):
         left, center, right = self.legs["zscore"].to_numpy()
         return center - (left + right) / 2
 
 
-class CalenderSpread(Spread, register=Concepts.Strategies.Spread.CALENDAR):
+class CalenderSpread(Spread, register=Concepts.Spread.CALENDAR):
     @property
     def zscore(self):
         near, far = self.legs["zscore"].to_numpy()
@@ -166,10 +166,10 @@ class SpreadCreator(ABC, metaclass=RegistryMeta):
 
     @staticmethod
     def securities(options):
-        for position in iter(Concepts.Securities.Position):
-            for option in iter(Concepts.Securities.Option):
-                security = [Concepts.Securities.Instrument.OPTION, option, position]
-#                security = Concepts.Securities.Security(security)
+        for position in iter(Concepts.Position):
+            for option in iter(Concepts.Option):
+                security = [Concepts.Instrument.OPTION, option, position]
+                security = Variables[tuple(security)]
                 dataframe = options[options["option"].eq(option)]
                 yield security, dataframe
 
@@ -184,7 +184,7 @@ class SpreadCreator(ABC, metaclass=RegistryMeta):
     def selector(security, located): pass
 
 
-class FlyCreator(SpreadCreator, register=Concepts.Strategies.Spread.FLY):
+class FlyCreator(SpreadCreator, register=Concepts.Spread.FLY):
     @staticmethod
     def organizer(securities):
         for security, dataframes in securities:
@@ -203,15 +203,15 @@ class FlyCreator(SpreadCreator, register=Concepts.Strategies.Spread.FLY):
     @staticmethod
     def selector(security, located):
         position = security.position
-#        hedge = Concepts.Securities.Position(-int(position))
-        located["spread"] = Concepts.Strategies.Spread.FLY
+        hedge = Concepts.Position.create(-int(position))
+        located["spread"] = Concepts.Spread.FLY
         located["position"] = [hedge, position, hedge]
         located["quantity"] = [1, 2, 1]
-        spread = Spread[Concepts.Strategies.Spread.FLY](located)
+        spread = Spread[Concepts.Spread.FLY](located)
         yield spread
 
 
-class CalendarCreator(SpreadCreator, register=Concepts.Strategies.Spread.CALENDAR):
+class CalendarCreator(SpreadCreator, register=Concepts.Spread.CALENDAR):
     @staticmethod
     def organizer(securities):
         for security, dataframes in securities:
@@ -229,11 +229,11 @@ class CalendarCreator(SpreadCreator, register=Concepts.Strategies.Spread.CALENDA
     @staticmethod
     def selector(security, located):
         position = security.position
-#        hedge = Concepts.Securities.Position(-int(position))
-        located["spread"] = Concepts.Strategies.Spread.CALENDAR
+        hedge = Concepts.Position.create(-int(position))
+        located["spread"] = Concepts.Spread.CALENDAR
         located["position"] = [hedge, position]
         located["quantity"] = [1, 1]
-        spread = Spread[Concepts.Strategies.Spread.CALENDAR](located)
+        spread = Spread[Concepts.Spread.CALENDAR](located)
         yield spread
 
 
@@ -241,8 +241,7 @@ class SpreadCalculator(Alerting):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         assert isinstance(limit, int) and limit > 0
         super().__init__(*args, **kwargs)
-#        spreads = [Concepts.Strategies.Spread[str(spread).upper()] for spread in spreads]
-        creators = {spread: SpreadCreator[spread](limit=limit) for spread in spreads}
+        creators = {Concepts.Spread.create(spread): SpreadCreator[spread](limit=limit) for spread in spreads}
         self.__creators = creators
 
     def __call__(self, options, *args, **kwargs):
@@ -250,7 +249,7 @@ class SpreadCalculator(Alerting):
         generator = self.calculator(options, *args, **kwargs)
         spreads = list(generator)
         sizes = dict(previous=len(options), post=len(spreads))
-        self.alert(spreads, title="Calculator", instrument=Concepts.Securities.Instrument.OPTION, **sizes)
+        self.alert(spreads, title="Calculator", instrument=Concepts.Instrument.OPTION, **sizes)
         return spreads
 
     def calculator(self, options, *args, **kwargs):
