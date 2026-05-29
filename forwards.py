@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from itertools import product
 
-from finance.variables import Alerting, Concepts
+# from finance.variables import Alerting, Concepts
 from support.calculations import Generator
 
 __version__ = "1.0.0"
