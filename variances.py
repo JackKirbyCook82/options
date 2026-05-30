@@ -86,7 +86,7 @@ class CleaningCalculator(ABC):
 
 
 class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
-    mae = lambda forward, strike, option: np.log(forward / strike) * option.astype(int)
+    mae = lambda forward, strike, option: np.log(forward / strike.astype(float)) * option.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
     def __call__(self, options, *args, **kwargs):

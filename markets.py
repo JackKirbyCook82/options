@@ -54,7 +54,7 @@ class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 5
 class MarketCalculator(Equations, Alerting):
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
-    moneyness = lambda spot, strike, option: np.log(spot / strike) * option.astype(int)
+    moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
     tightness = lambda bid, ask, median: (ask - bid) / median
     quality = lambda tightness, demand, supply: np.sqrt(1 + demand + supply) / (tightness ** 2 + 1e-6)
     mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)

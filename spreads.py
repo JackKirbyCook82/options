@@ -169,7 +169,7 @@ class SpreadCreator(ABC, metaclass=RegistryMeta):
         for position in iter(Concepts.Position):
             for option in iter(Concepts.Option):
                 security = [Concepts.Instrument.OPTION, option, position]
-                security = Variables[tuple(security)]
+                security = Variables.Securities[tuple(security)]
                 dataframe = options[options["option"].eq(option)]
                 yield security, dataframe
 
