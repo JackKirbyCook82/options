@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from itertools import product
 
-from finance.variables import Alerting, Concepts
+from finance.variables import Alerting, Enumerations
 from support.calculations import Generator
 
 __version__ = "1.0.0"
@@ -40,7 +40,7 @@ class ForwardCalculator(Generator, Alerting):
         forward = self.generate(options, *args, **kwargs)
         forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
         forward = forward.reset_index(drop=True, inplace=False)
-        self.alert(forward, title="Calculated", instrument=Concepts.Instrument.OPTION)
+        self.alert(forward, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return forward
 
     def generator(self, options, *args, **kwargs):
@@ -48,7 +48,7 @@ class ForwardCalculator(Generator, Alerting):
         for (ticker, expire), options in options.groupby(["ticker", "expire"]):
             spot = options["spot"].dropna(inplace=False).to_numpy()
             tau = options["tau"].dropna(inplace=False).to_numpy()
-            instrument = str(Concepts.Instrument.OPTION).title()
+            instrument = str(Enumerations.Instrument.OPTION).title()
             constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
@@ -98,13 +98,13 @@ class ForwardCalculator(Generator, Alerting):
     @staticmethod
     def samples(options, *args, **kwargs):
         samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "gap", "supply", "demand"], sort=False).sort_index()
-        if set(Concepts.Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
-        validity = [samples[index].notna() for index in list(product(["median", "gap"], list(Concepts.Option)))]
+        if set(Enumerations.Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
+        validity = [samples[index].notna() for index in list(product(["median", "gap"], list(Enumerations.Option)))]
         samples = samples[np.logical_and.reduce(validity)]
-        difference = (samples["median", Concepts.Option.CALL] - samples["median", Concepts.Option.PUT]).rename("difference")
-        supply = (samples["supply", Concepts.Option.CALL] + samples["supply", Concepts.Option.PUT]).rename("supply")
-        demand = (samples["demand", Concepts.Option.CALL] + samples["demand", Concepts.Option.PUT]).rename("demand")
-        gap = (samples["gap", Concepts.Option.CALL] + samples["gap", Concepts.Option.PUT]).rename("gap")
+        difference = (samples["median", Enumerations.Option.CALL] - samples["median", Enumerations.Option.PUT]).rename("difference")
+        supply = (samples["supply", Enumerations.Option.CALL] + samples["supply", Enumerations.Option.PUT]).rename("supply")
+        demand = (samples["demand", Enumerations.Option.CALL] + samples["demand", Enumerations.Option.PUT]).rename("demand")
+        gap = (samples["gap", Enumerations.Option.CALL] + samples["gap", Enumerations.Option.PUT]).rename("gap")
         strike = samples.index.get_level_values("strike").to_series(index=samples.index)
         samples = pd.concat([strike, difference, gap, supply, demand], axis=1)
         samples = samples.reset_index(drop=True, inplace=False)

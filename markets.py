@@ -11,7 +11,7 @@ import pandas as pd
 from abc import ABC
 from datetime import date as Date
 
-from finance.variables import Alerting, Concepts
+from finance.variables import Alerting, Enumerations
 from support.equations import Equations
 from support.calculations import Filter
 
@@ -30,7 +30,7 @@ class MarketFilter(Filter, Alerting, ABC):
         markets = self.filter(markets, *args, **kwargs)
         post = len(markets.index)
         sizes = dict(previous=previous, post=post)
-        self.alert(markets, title="Filtered", instrument=Concepts.Instrument.OPTION, **sizes)
+        self.alert(markets, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
         return markets
 
 
@@ -65,7 +65,7 @@ class MarketCalculator(Equations, Alerting):
         assert isinstance(options, pd.DataFrame)
         markets = self.execute(options, *args, **kwargs)
         markets = pd.concat([options, markets], axis=1)
-        self.alert(markets, title="Calculated", instrument=Concepts.Instrument.OPTION)
+        self.alert(markets, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return markets
 
 

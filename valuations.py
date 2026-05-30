@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.variables import Alerting, Concepts
+from finance.variables import Alerting, Enumerations
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -75,7 +75,7 @@ class ValuationCalculator(Alerting):
         valuation = calculation(x, k, τ, σ, i, float(interest), float(dividends))
         valuation = pd.Series(valuation, name="value")
         valuation = pd.concat([options, valuation], axis=1)
-        self.alert(valuation, title="Calculated", instrument=Concepts.Instrument.OPTION)
+        self.alert(valuation, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return valuation
 
 

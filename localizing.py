@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 
-from finance.variables import Alerting, Concepts
+from finance.variables import Alerting, Enumerations
 from support.custom import NumRange
 
 __version__ = "1.0.0"
@@ -49,7 +49,7 @@ class LocalizingCalculator(Alerting):
             if not self.adequate(local): continue
             local.attrs["center"] = Variables(tau=pair.tau, mae=pair.mae)
             local.attrs["radius"] = Variables(tau=self.radius.tau, mae=self.radius.mae)
-            self.alert(local, title="Calculated", instrument=Concepts.Instrument.OPTION)
+            self.alert(local, title="Calculated", instrument=Enumerations.Instrument.OPTION)
             yield local
 
     def taus(self, options):

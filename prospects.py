@@ -6,7 +6,7 @@ Created on Tues May 12 2026
 
 """
 
-from finance.variables import Alerting, Concepts
+from finance.variables import Alerting, Enumerations
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -18,7 +18,7 @@ __license__ = "MIT License"
 class ProspectCalculator(Alerting):
     def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
-        metrics = {Concepts.Spread.create(key): value for key, value in metrics.items()}
+        metrics = {Enumerations.Spread(key): value for key, value in metrics.items()}
         self.__metrics = metrics
 
     def __call__(self, spreads, *args, **kwargs):
@@ -26,7 +26,7 @@ class ProspectCalculator(Alerting):
         generator = self.calculator(spreads, *args, **kwargs)
         prospects = list(generator)
         sizes = dict(previous=len(spreads), post=len(prospects))
-        self.alert(prospects, title="Calculator", instrument=Concepts.Instrument.OPTION, **sizes)
+        self.alert(prospects, title="Calculator", instrument=Enumerations.Instrument.OPTION, **sizes)
         return prospects
 
     def calculator(self, spreads, *args, **kwargs):
@@ -59,7 +59,7 @@ class PriorityCalculator(Alerting):
         assert isinstance(prospects, list)
         priorities = self.calculate(prospects, *args, **kwargs)
         sizes = dict(previous=len(prospects), post=len(priorities))
-        self.alert(priorities, title="Calculator", instrument=Concepts.Instrument.OPTION, **sizes)
+        self.alert(priorities, title="Calculator", instrument=Enumerations.Instrument.OPTION, **sizes)
         return priorities
 
     def calculate(self, prospects, *args, **kwargs):
