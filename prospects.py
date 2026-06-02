@@ -26,7 +26,7 @@ class ProspectCalculator(Alerting):
         generator = self.calculator(spreads, *args, **kwargs)
         prospects = list(generator)
         sizes = dict(previous=len(spreads), post=len(prospects))
-        self.alert(prospects, title="Calculator", instrument=Enumerations.Instrument.OPTION, **sizes)
+        self.alert(prospects, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
         return prospects
 
     def calculator(self, spreads, *args, **kwargs):
@@ -39,7 +39,7 @@ class ProspectCalculator(Alerting):
 
     @staticmethod
     def prospect(spread, metrics):
-        profit = spread.profit >= metrics.profit
+        profit = float(spread.profit) >= metrics.profit
         zscore = abs(spread.zscore) >= abs(metrics.zscore)
         gap = spread.ratios.gap <= metrics.ratios.gap
         try: gamma = spread.ratios.gamma <= metrics.ratios.gamma
@@ -59,7 +59,7 @@ class PriorityCalculator(Alerting):
         assert isinstance(prospects, list)
         priorities = self.calculate(prospects, *args, **kwargs)
         sizes = dict(previous=len(prospects), post=len(priorities))
-        self.alert(priorities, title="Calculator", instrument=Enumerations.Instrument.OPTION, **sizes)
+        self.alert(priorities, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
         return priorities
 
     def calculate(self, prospects, *args, **kwargs):

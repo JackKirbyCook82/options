@@ -69,7 +69,8 @@ class Ratios:
     gap: Optional[float] = None
 
 @dataclass(frozen=True)
-class Metrics: ratios: Ratios; zscore: float; edge: float
+class Metrics:
+    ratios: Ratios; zscore: float; profit: float
 
 
 class SpreadMeta(RegistryMeta): pass
@@ -162,12 +163,14 @@ class SpreadCreator(ABC, metaclass=RegistryMeta):
             for locator in locators:
                 located = dataframe.iloc[locator].copy()
                 selected = self.selector(security, located)
-                yield selected
+                yield from selected
 
     @staticmethod
     def securities(options):
         for position in iter(Enumerations.Position):
             for option in iter(Enumerations.Option):
+                if option is Enumerations.Option.EMPTY: continue
+                if position is Enumerations.Position.EMPTY: continue
                 security = [Enumerations.Instrument.OPTION, option, position]
                 security = Specifications.Securities(tuple(security))
                 dataframe = options[options["option"].eq(option)]
@@ -249,7 +252,7 @@ class SpreadCalculator(Alerting):
         generator = self.calculator(options, *args, **kwargs)
         spreads = list(generator)
         sizes = dict(previous=len(options), post=len(spreads))
-        self.alert(spreads, title="Calculator", instrument=Enumerations.Instrument.OPTION, **sizes)
+        self.alert(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
         return spreads
 
     def calculator(self, options, *args, **kwargs):

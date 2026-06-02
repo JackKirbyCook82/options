@@ -48,7 +48,6 @@ class ForwardCalculator(Generator, Alerting):
         for (ticker, expire), options in options.groupby(["ticker", "expire"]):
             spot = options["spot"].dropna(inplace=False).to_numpy()
             tau = options["tau"].dropna(inplace=False).to_numpy()
-            instrument = str(Enumerations.Instrument.OPTION).title()
             constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
@@ -61,17 +60,17 @@ class ForwardCalculator(Generator, Alerting):
                 if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, *args, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    self.console("Regression", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
+                    self.console("Regression", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                     yield options
                 else:
                     forwards = self.secondary(samples, weights, *args, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    self.console("AverageCarry", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
+                    self.console("AverageCarry", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                     yield options
             except ForwardSampleError:
                 forwards = self.tertiary(*args, **constants, **kwargs)
                 options = options.assign(**forwards)
-                self.console("SingleCarry", f"{instrument}[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
+                self.console("SingleCarry", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                 yield options
 
     def primary(self, samples, weights, *args, **kwargs):
