@@ -259,6 +259,11 @@ class SpreadCalculator(Alerting):
         assert isinstance(options, pd.DataFrame)
         for creator in self.creators.values():
             for spread in creator(options):
+
+                print(spread.legs)
+                print(spread.legs.dtypes)
+                raise Exception()
+
                 yield spread
 
     @property
