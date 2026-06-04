@@ -162,8 +162,9 @@ class SpreadCreator(ABC, metaclass=RegistryMeta):
             locators = self.locators(limit, length)
             for locator in locators:
                 located = dataframe.iloc[locator].copy()
-                selected = self.selector(security, located)
-                yield from selected
+                selector = self.selector(security, located)
+                for selected in selector:
+                    yield self.create(selected)
 
     @staticmethod
     def securities(options):
@@ -185,6 +186,9 @@ class SpreadCreator(ABC, metaclass=RegistryMeta):
     @staticmethod
     @abstractmethod
     def selector(security, located): pass
+    @staticmethod
+    @abstractmethod
+    def create(selected): pass
 
 
 class FlyCreator(SpreadCreator, register=Enumerations.Spread.FLY):
@@ -210,8 +214,10 @@ class FlyCreator(SpreadCreator, register=Enumerations.Spread.FLY):
         located["spread"] = Enumerations.Spread.FLY
         located["position"] = [hedge, position, hedge]
         located["quantity"] = [1, 2, 1]
-        spread = Spread[Enumerations.Spread.FLY](located)
-        yield spread
+        yield located
+
+    @staticmethod
+    def create(located): return Spread[Enumerations.Spread.FLY](located)
 
 
 class CalendarCreator(SpreadCreator, register=Enumerations.Spread.CALENDAR):
@@ -236,8 +242,10 @@ class CalendarCreator(SpreadCreator, register=Enumerations.Spread.CALENDAR):
         located["spread"] = Enumerations.Spread.CALENDAR
         located["position"] = [hedge, position]
         located["quantity"] = [1, 1]
-        spread = Spread[Enumerations.Spread.CALENDAR](located)
-        yield spread
+        yield located
+
+    @staticmethod
+    def create(located): return Spread[Enumerations.Spread.CALENDAR](located)
 
 
 class SpreadCalculator(Alerting):
@@ -259,11 +267,6 @@ class SpreadCalculator(Alerting):
         assert isinstance(options, pd.DataFrame)
         for creator in self.creators.values():
             for spread in creator(options):
-
-                print(spread.legs)
-                print(spread.legs.dtypes)
-                raise Exception()
-
                 yield spread
 
     @property
