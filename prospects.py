@@ -26,7 +26,7 @@ class ProspectCalculator(Alerting):
         generator = self.calculator(spreads, *args, **kwargs)
         prospects = list(generator)
         sizes = dict(previous=len(spreads), post=len(prospects))
-        self.alert(prospects, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
+        self.alert(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
         return prospects
 
     def calculator(self, spreads, *args, **kwargs):
