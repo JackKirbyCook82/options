@@ -87,7 +87,7 @@ class Spread(ABC, metaclass=SpreadMeta):
     @property
     def osi(self): return self.legs[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
     @property
-    def cost(self): return (self.legs["median"] * self.position * self.quantity).sum()
+    def cost(self): return (self.legs["median"] * self.position.map(int) * self.quantity).sum()
 
     @property
     def score(self): return Score(self.profit, self.quality, self.risk)
@@ -99,16 +99,16 @@ class Spread(ABC, metaclass=SpreadMeta):
     def risk(self): return Risk(self.gamma, self.theta, self.vega)
 
     @property
-    def gamma(self): return (self.legs["gamma"] * self.position * self.quantity).sum()
+    def gamma(self): return (self.legs["gamma"] * self.position.map(int) * self.quantity).sum()
     @property
-    def theta(self): return (self.legs["theta"] * self.position * self.quantity).sum()
+    def theta(self): return (self.legs["theta"] * self.position.map(int) * self.quantity).sum()
     @property
-    def vega(self): return (self.legs["vega"] * self.position * self.quantity).sum()
+    def vega(self): return (self.legs["vega"] * self.position.map(int) * self.quantity).sum()
 
     @property
-    def valuation(self): return (self.legs["value"] * self.position * self.quantity).sum()
+    def valuation(self): return (self.legs["value"] * self.position.map(int) * self.quantity).sum()
     @property
-    def market(self): return (self.legs["median"] * self.position * self.quantity).sum()
+    def market(self): return (self.legs["median"] * self.position.map(int) * self.quantity).sum()
     @property
     def gap(self): return (self.legs["gap"] * self.quantity).sum()
 
@@ -121,7 +121,7 @@ class Spread(ABC, metaclass=SpreadMeta):
         return Ratios(gamma=gamma, theta=theta, vega=vega, gap=gap)
 
     @property
-    def position(self): return self.legs["position"].map(int)
+    def position(self): return self.legs["position"]
     @property
     def quantity(self): return self.legs["quantity"]
 

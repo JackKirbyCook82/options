@@ -59,7 +59,7 @@ class PriorityCalculator(Alerting):
         assert isinstance(prospects, list)
         priorities = self.calculate(prospects, *args, **kwargs)
         sizes = dict(previous=len(prospects), post=len(priorities))
-        self.alert(priorities, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
+        self.alert(prospects, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
         return priorities
 
     def calculate(self, prospects, *args, **kwargs):

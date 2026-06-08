@@ -8,6 +8,7 @@ Created on Fri Apr 10 2026
 
 import numpy as np
 import pandas as pd
+from math import isclose
 from dataclasses import dataclass
 
 from finance.variables import Alerting, Enumerations
@@ -40,6 +41,7 @@ class LocalizingCalculator(Alerting):
         options = options[mask].dropna(how="all", inplace=False)
         taus, maes = self.taus(options), self.maes(options)
         pairs = [Variables(tau=tau, mae=mae) for mae in maes for tau in taus]
+        pairs = self.generator(pairs, tolerance=Variables(1e-8, 1e-8))
         for pair in pairs:
             tau = NumRange.create([pair.tau - self.radius.tau, pair.tau + self.radius.tau])
             mae = NumRange.create([pair.mae - self.radius.mae, pair.mae + self.radius.mae])
@@ -75,9 +77,13 @@ class LocalizingCalculator(Alerting):
         return quantity & coverage
 
     @staticmethod
-    def average(axis, decimals): return round((axis.minimum + axis.maximum) / 2, decimals)
-    @staticmethod
-    def distance(axis, decimals): return round((axis.maximum - axis.minimum) / 2, decimals)
+    def generator(variables, tolerance):
+        similar = lambda lead, lag: (isclose(lead.tau, lag.tau, abs_tol=tolerance.tau) and isclose(lead.mae, lag.mae, abs_tol=tolerance.mae))
+        yielded = list()
+        for variable in variables:
+            if not any(similar(variable, prior) for prior in yielded):
+                yielded.append(variable)
+                yield variable
 
     @staticmethod
     def alternate(array):
@@ -90,6 +96,11 @@ class LocalizingCalculator(Alerting):
             except StopIteration: yield from right; return
             try: yield next(right)
             except StopIteration: yield from left; return
+
+    @staticmethod
+    def average(axis, decimals): return round((axis.minimum + axis.maximum) / 2, decimals)
+    @staticmethod
+    def distance(axis, decimals): return round((axis.maximum - axis.minimum) / 2, decimals)
 
     @property
     def quantity(self): return self.__quantity
