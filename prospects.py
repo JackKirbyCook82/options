@@ -23,6 +23,7 @@ class ProspectCalculator(Alerting):
 
     def __call__(self, spreads, *args, **kwargs):
         assert isinstance(spreads, list)
+        if not spreads: return spreads
         generator = self.calculator(spreads, *args, **kwargs)
         prospects = list(generator)
         sizes = dict(previous=len(spreads), post=len(prospects))
@@ -57,6 +58,7 @@ class ProspectCalculator(Alerting):
 class PriorityCalculator(Alerting):
     def __call__(self, prospects, *args, **kwargs):
         assert isinstance(prospects, list)
+        if not prospects: return prospects
         priorities = self.calculate(prospects, *args, **kwargs)
         sizes = dict(previous=len(prospects), post=len(priorities))
         self.alert(prospects, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)

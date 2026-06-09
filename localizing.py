@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Apr 10 2026
-@name:   Option Dataset Objects
+@name:   Option Localizing Objects
 @author: Jack Kirby Cook
 
 """
 
 import numpy as np
 import pandas as pd
-from math import isclose
+from typing import Any
 from dataclasses import dataclass
 
 from finance.variables import Alerting, Enumerations
@@ -16,74 +16,91 @@ from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["LocalizingCalculator"]
+__all__ = ["LocalizingCalculator", "Radius", "Variables", "Axes"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
 @dataclass(frozen=True)
-class Variables: tau: float; mae: float
+class Radius:
+    inner: float = 0.05
+    outer: float = 0.12
+    step: float = 0.01
+
+@dataclass(frozen=True)
+class Tau:
+    window: int = 2
+    coverage: int = 5
+
+@dataclass(frozen=True)
+class Mae:
+    radius: Radius
+    coverage: int = 10
+
+@dataclass(frozen=True)
+class Variables: tau: Any; mae: Any
+class Axes: Tau = Tau; Mae = Mae
 
 
 class LocalizingCalculator(Alerting):
-    def __init__(self, *args, quantity=35, coverage=Variables(tau=5, mae=10), radius=Variables(tau=0.15, mae=0.05), **kwargs):
-        assert isinstance(radius, (tuple, Variables))
+    def __init__(self, *args, variables, samples=35, overlap=0.80, **kwargs):
+        assert isinstance(variables, Variables)
         super().__init__(*args, **kwargs)
-        coverage = Variables(**dict(zip(["tau", "mae"], coverage))) if isinstance(coverage, tuple) else coverage
-        radius = Variables(**dict(zip(["tau", "mae"], radius))) if isinstance(radius, tuple) else radius
-        self.__quantity = int(quantity)
-        self.__coverage = coverage
-        self.__radius = radius
+        self.__variables = variables
+        self.__overlap = float(overlap)
+        self.__samples = int(samples)
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
-        options = options[mask].dropna(how="all", inplace=False)
-        taus, maes = self.taus(options), self.maes(options)
-        pairs = [Variables(tau=tau, mae=mae) for mae in maes for tau in taus]
-        pairs = self.generator(pairs, tolerance=Variables(1e-8, 1e-8))
-        for pair in pairs:
-            tau = NumRange.create([pair.tau - self.radius.tau, pair.tau + self.radius.tau])
-            mae = NumRange.create([pair.mae - self.radius.mae, pair.mae + self.radius.mae])
-            tau = options["tau"].between(tau.minimum, tau.maximum)
-            mae = options["mae"].between(mae.minimum, mae.maximum)
-            local = options.loc[tau & mae]
-            if not self.adequate(local): continue
-            local.attrs["center"] = Variables(tau=pair.tau, mae=pair.mae)
-            local.attrs["radius"] = Variables(tau=self.radius.tau, mae=self.radius.mae)
+        options = options[options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()].copy()
+        for local in self.calculator(options):
             self.alert(local, title="Calculated", instrument=Enumerations.Instrument.OPTION)
             yield local
 
-    def taus(self, options):
-        tau = np.sort(options["tau"].dropna().unique().astype(float))
-        limits = NumRange.create([tau.min() + self.radius.tau, tau.max() - self.radius.tau])
-        tau = tau[(tau >= limits.minimum) & (tau <= limits.maximum)]
-        tau = np.fromiter(self.alternate(tau), dtype=float)
-        return tau
-
-    def maes(self, options):
-        mae = options["mae"].to_numpy(dtype=float)
-        limits = NumRange.create([np.nanmin(mae) + self.radius.mae, np.nanmax(mae) - self.radius.mae])
-        step = self.radius.mae / 2
-        mae = np.arange(limits.minimum, limits.maximum + step, step, dtype=float)
-        order = np.argsort(np.abs(mae))
-        return mae[order]
-
-    def adequate(self, local):
-        tau = local["tau"].nunique() >= self.coverage.tau
-        mae = local["mae"].nunique() >= self.coverage.mae
-        quantity = len(local) >= self.quantity
-        coverage = tau & mae
-        return quantity & coverage
+    def calculator(self, options):
+        taus, maes, history = self.taus(options), self.maes(options), list()
+        for index, tau in enumerate(taus):
+            low = max(0, index - self.variables.tau.window)
+            high = min(len(taus), index + self.variables.tau.window + 1)
+            for mae in maes:
+                center = Variables(tau=tau, mae=mae)
+                radius = Variables(tau=len(taus[low:high]), mae=self.variables.mae.radius.inner)
+                while radius.mae <= self.variables.mae.radius.outer:
+                    population = Variables(tau=taus[low:high], mae=NumRange.create([mae - radius.mae, mae + radius.mae]))
+                    mask = Variables(options["tau"].isin(population.tau), options["mae"].between(population.mae.minimum, population.mae.maximum))
+                    local = options[mask.tau & mask.mae]
+                    if self.adequate(local) and not self.similar(local, history):
+                        local.attrs["population"] = population
+                        local.attrs["center"] = center
+                        local.attrs["radius"] = radius
+                        history.append(set(local.index))
+                        yield local
+                        break
+                    radius = Variables(tau=radius.tau, mae=radius.mae + self.variables.mae.radius.step)
 
     @staticmethod
-    def generator(variables, tolerance):
-        similar = lambda lead, lag: (isclose(lead.tau, lag.tau, abs_tol=tolerance.tau) and isclose(lead.mae, lag.mae, abs_tol=tolerance.mae))
-        yielded = list()
-        for variable in variables:
-            if not any(similar(variable, prior) for prior in yielded):
-                yielded.append(variable)
-                yield variable
+    def taus(options): return np.sort(options["tau"].unique().astype(float))
+    def maes(self, options):
+        mae = options["mae"].to_numpy(dtype=float)
+        low, high = np.nanmin(mae), np.nanmax(mae)
+        step = self.variables.mae.radius.inner / 2
+        centers = np.arange(low, high + step, step, dtype=float)
+        order = np.argsort(np.abs(centers))
+        return centers[order]
+
+    def adequate(self, local):
+        tau = local["tau"].nunique() >= self.variables.tau.coverage
+        mae = local["mae"].nunique() >= self.variables.mae.coverage
+        return (len(local) >= self.samples) and tau and mae
+
+    def similar(self, local, history):
+        current = set(local.index)
+        for prior in history:
+            union = len(current | prior)
+            if union == 0: continue
+            overlap = len(current & prior) / union
+            if overlap >= self.overlap: return True
+        return False
 
     @staticmethod
     def alternate(array):
@@ -97,15 +114,12 @@ class LocalizingCalculator(Alerting):
             try: yield next(right)
             except StopIteration: yield from left; return
 
-    @staticmethod
-    def average(axis, decimals): return round((axis.minimum + axis.maximum) / 2, decimals)
-    @staticmethod
-    def distance(axis, decimals): return round((axis.maximum - axis.minimum) / 2, decimals)
+    @property
+    def variables(self): return self.__variables
+    @property
+    def samples(self): return self.__samples
+    @property
+    def overlap(self): return self.__overlap
 
-    @property
-    def quantity(self): return self.__quantity
-    @property
-    def coverage(self): return self.__coverage
-    @property
-    def radius(self): return self.__radius
+
 
