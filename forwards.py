@@ -51,7 +51,14 @@ class ForwardCalculator(Generator, Alerting):
             constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
+
+                print(options)
+
                 samples = self.samples(options, *args, **kwargs)
+
+                print(samples)
+                raise Exception()
+
                 gaps = self.gaps(samples["gap"], spot[0])
                 assert isinstance(gaps, (pd.Series, pd.DataFrame))
                 gaps = gaps.squeeze() if isinstance(gaps, pd.DataFrame) else gaps

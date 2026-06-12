@@ -36,8 +36,8 @@ class MarketFilter(Filter, Alerting, ABC):
 
 class SanityFilter(MarketFilter, variables=["sanity"]):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
-    supplied = lambda supply: supply.notna() & (supply >= 1)
-    demanded = lambda demand: demand.notna() & (demand >= 1)
+    supplied = lambda supply: supply.notna() & (supply >= 0)
+    demanded = lambda demand: demand.notna() & (demand >= 0)
     bided = lambda bid: bid.notna() & np.isfinite(bid) & (bid >= 0)
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
@@ -52,12 +52,12 @@ class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 5
 
 
 class MarketCalculator(Equations, Alerting):
+    moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
-    moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
-    tightness = lambda bid, ask, median: (ask - bid) / median
-    quality = lambda tightness, demand, supply: np.sqrt(1 + demand + supply) / (tightness ** 2 + 1e-6)
-    mean = lambda bid, ask, demand, supply: (bid * demand + ask * supply) / (demand + supply)
+    quality = lambda activity, tightness: activity / (tightness ** 2 + 1e-6)
+    activity = lambda supply, demand: np.sqrt(1 + demand + supply)
+    tightness = lambda gap, median: gap / median
     median = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
