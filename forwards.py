@@ -26,14 +26,10 @@ class ForwardSampleError(ForwardError): pass
 
 
 class ForwardCalculator(Generator, Alerting):
-    def __init__(self, *args, weights, gaps, samplesize=5, **kwargs):
-        assert callable(weights) and callable(gaps)
-        assert self.arguments(weights) == ["gap", "supply", "demand"]
-        assert self.arguments(gaps) == ["gap", "spot"]
+    def __init__(self, *args, tight=0.05, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
-        self.__weights = weights
-        self.__gaps = gaps
+        self.__tightness = float(tight)
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
@@ -51,19 +47,10 @@ class ForwardCalculator(Generator, Alerting):
             constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
-
-                print(options)
-
                 samples = self.samples(options, *args, **kwargs)
-
-                print(samples)
-                raise Exception()
-
-                gaps = self.gaps(samples["gap"], spot[0])
-                assert isinstance(gaps, (pd.Series, pd.DataFrame))
-                gaps = gaps.squeeze() if isinstance(gaps, pd.DataFrame) else gaps
-                samples = samples.where(gaps).dropna(how="all", inplace=False)
-                weights = self.weights(samples["gap"], samples["supply"], samples["demand"])
+                mask = samples["gap"] / samples["median"] <= self.tightness
+                samples = samples.where(mask).dropna(how="all", inplace=False)
+                weights = self.weights(samples, *args, **kwargs)
                 if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, *args, **constants, **kwargs)
                     options = options.assign(**forwards)
@@ -110,11 +97,18 @@ class ForwardCalculator(Generator, Alerting):
         difference = (samples["median", Enumerations.Option.CALL] - samples["median", Enumerations.Option.PUT]).rename("difference")
         supply = (samples["supply", Enumerations.Option.CALL] + samples["supply", Enumerations.Option.PUT]).rename("supply")
         demand = (samples["demand", Enumerations.Option.CALL] + samples["demand", Enumerations.Option.PUT]).rename("demand")
+        median = (samples["median", Enumerations.Option.CALL] + samples["median", Enumerations.Option.PUT]).rename("median")
         gap = (samples["gap", Enumerations.Option.CALL] + samples["gap", Enumerations.Option.PUT]).rename("gap")
         strike = samples.index.get_level_values("strike").to_series(index=samples.index)
-        samples = pd.concat([strike, difference, gap, supply, demand], axis=1)
+        samples = pd.concat([strike, difference, median, gap, supply, demand], axis=1)
         samples = samples.reset_index(drop=True, inplace=False)
         return samples
+
+    @staticmethod
+    def weights(samples, *args, **kwargs):
+        activity = np.sqrt((samples["supply"] + samples["demand"]).clip(lower=0.0))
+        weights = activity / samples["gap"].clip(lower=1e-6)
+        return weights
 
     @staticmethod
     def regression(y, x, w):
@@ -131,9 +125,8 @@ class ForwardCalculator(Generator, Alerting):
     @property
     def samplesize(self): return self.__samplesize
     @property
-    def weights(self): return self.__weights
-    @property
-    def gaps(self): return self.__gaps
+    def tightness(self): return self.__tightness
+
 
 
 
