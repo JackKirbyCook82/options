@@ -12,6 +12,7 @@ from abc import ABC
 from scipy.spatial import cKDTree
 
 from finance.variables import Alerting, Enumerations
+from scipy.stats import multivariate_t
 from support.equations import Equations
 
 __version__ = "1.0.0"
@@ -59,10 +60,13 @@ class NeighborhoodCalculator(Alerting, ABC):
     def neighbors(self): return self.__neighbors
 
 
+class ScreeningError(Exception): pass
 class ScreeningCalculator(NeighborhoodCalculator):
-    def __init__(self, *args, threshold=5, **kwargs):
+    def __init__(self, *args, quantile=0.95, multiple=2.5, **kwargs):
+        assert (0.0 < quantile < 1.0) and (multiple > 1.0)
         super().__init__(*args, **kwargs)
-        self.__threshold = int(threshold)
+        self.__quantile = float(quantile)
+        self.__multiple = float(multiple)
 
     def screen(self, variance):
         tau = variance["tau"].to_numpy(dtype=float)
@@ -70,11 +74,18 @@ class ScreeningCalculator(NeighborhoodCalculator):
         tiv = variance["tiv"].to_numpy(dtype=float)
         ntiv = self.neighborhood(tau, mae, tiv)
         ntiv = np.fromiter(ntiv, dtype=np.float64)
-        mask = ntiv > self.threshold
+        valid = np.isfinite(ntiv) & (ntiv > 0)
+        if not valid.any(): raise ScreeningError()
+        ntiv = ntiv[valid]
+        quantile = np.quantile(ntiv, self.quantile)
+        median = np.median(ntiv)
+        mask = ntiv > max(quantile, self.multiple * median)
         return variance.loc[~mask]
 
     @property
-    def threshold(self): return self.__threshold
+    def quantile(self): return self.__quantile
+    @property
+    def multiple(self): return self.__multiple
 
 
 class CleaningCalculator(ABC):
