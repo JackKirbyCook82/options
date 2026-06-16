@@ -16,10 +16,16 @@ from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["LocalizingCalculator", "Radius", "Variables", "Axes"]
+__all__ = ["LocalizingCalculator", "LocalizingVariables"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
+
+@dataclass(frozen=True)
+class Window:
+    inner: int = 1
+    outer: int = 3
+    step: int = 1
 
 @dataclass(frozen=True)
 class Radius:
@@ -29,8 +35,9 @@ class Radius:
 
 @dataclass(frozen=True)
 class Tau:
-    window: int = 2
-    coverage: int = 5
+    window: Window
+    coverage: int = 3
+    limit: float = 45 / 365
 
 @dataclass(frozen=True)
 class Mae:
@@ -38,13 +45,24 @@ class Mae:
     coverage: int = 10
 
 @dataclass(frozen=True)
-class Variables: tau: Any; mae: Any
-class Axes: Tau = Tau; Mae = Mae
+class LocalizingVariables:
+    tau: Any; mae: Any
+
+    @classmethod
+    def create(cls, /, radius, window, coverage, limit):
+        assert isinstance(radius, tuple) and len(radius) == 3
+        assert isinstance(window, tuple) and len(window) == 3
+        assert isinstance(coverage, tuple) and len(coverage) == 2
+        radius = Radius(*list(map(float, radius)))
+        window = Window(*list(map(float, window)))
+        tau = Tau(window=window, coverage=coverage[0], limit=float(limit))
+        mae = Mae(radius=radius, coverage=coverage[1])
+        return cls(tau=tau, mae=mae)
 
 
 class LocalizingCalculator(Alerting):
     def __init__(self, *args, variables, samples=35, overlap=0.80, **kwargs):
-        assert isinstance(variables, Variables)
+        assert isinstance(variables, LocalizingVariables)
         super().__init__(*args, **kwargs)
         self.__variables = variables
         self.__overlap = float(overlap)
@@ -58,35 +76,39 @@ class LocalizingCalculator(Alerting):
             yield local
 
     def calculator(self, options):
-        taus, maes, history = self.taus(options), self.maes(options), list()
-        for index, tau in enumerate(taus):
-            low = max(0, index - self.variables.tau.window)
-            high = min(len(taus), index + self.variables.tau.window + 1)
-            for mae in maes:
-                center = Variables(tau=tau, mae=mae)
-                radius = Variables(tau=len(taus[low:high]), mae=self.variables.mae.radius.inner)
-                while radius.mae <= self.variables.mae.radius.outer:
-                    population = Variables(tau=taus[low:high], mae=NumRange.create([mae - radius.mae, mae + radius.mae]))
-                    mask = Variables(options["tau"].isin(population.tau), options["mae"].between(population.mae.minimum, population.mae.maximum))
-                    local = options[mask.tau & mask.mae]
-                    if self.adequate(local) and not self.similar(local, history):
-                        local.attrs["population"] = population
-                        local.attrs["center"] = center
-                        local.attrs["radius"] = radius
-                        history.append(set(local.index))
-                        yield local
-                        break
-                    radius = Variables(tau=radius.tau, mae=radius.mae + self.variables.mae.radius.step)
+        centers, history = self.centers(options), list()
 
-    @staticmethod
-    def taus(options): return np.sort(options["tau"].unique().astype(float))
-    def maes(self, options):
+
+
+#    def calculator(self, options):
+#        taus, maes, history = self.taus(options), self.maes(options), list()
+#        for index, tau in enumerate(taus):
+#            low = max(0, index - self.variables.tau.window)
+#            high = min(len(taus), index + self.variables.tau.window + 1)
+#            for mae in maes:
+#                center = LocalizingVariables(tau=tau, mae=mae)
+#                radius = LocalizingVariables(tau=len(taus[low:high]), mae=self.variables.mae.radius.inner)
+#                while radius.mae <= self.variables.mae.radius.outer:
+#                    population = LocalizingVariables(tau=taus[low:high], mae=NumRange.create([mae - radius.mae, mae + radius.mae]))
+#                    mask = LocalizingVariables(options["tau"].isin(population.tau), options["mae"].between(population.mae.minimum, population.mae.maximum))
+#                    local = options[mask.tau & mask.mae]
+#                    if self.adequate(local) and not self.similar(local, history):
+#                        local.attrs["population"] = population
+#                        local.attrs["center"] = center
+#                        local.attrs["radius"] = radius
+#                        history.append(set(local.index))
+#                        yield local
+#                        break
+#                    radius = LocalizingVariables(tau=radius.tau, mae=radius.mae + self.variables.mae.radius.step)
+
+    def centers(self, options):
+        taus = np.sort(options["tau"].unique().astype(float))
         mae = options["mae"].to_numpy(dtype=float)
         low, high = np.nanmin(mae), np.nanmax(mae)
         step = self.variables.mae.radius.inner / 2
-        centers = np.arange(low, high + step, step, dtype=float)
-        order = np.argsort(np.abs(centers))
-        return centers[order]
+        maes = np.arange(low, high + step, step, dtype=float)
+        order = np.argsort(np.abs(maes))
+        return LocalizingVariables(taus, maes[order])
 
     def adequate(self, local):
         tau = local["tau"].nunique() >= self.variables.tau.coverage

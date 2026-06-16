@@ -9,16 +9,16 @@ Created on Sat May 16 2026
 import numpy as np
 import pandas as pd
 from typing import Optional
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from functools import total_ordering
+from dataclasses import dataclass, fields
 
 from finance.variables import Alerting, Enumerations, Specifications, OSI
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["SpreadCalculator", "Metrics", "Ratios"]
+__all__ = ["SpreadCalculator", "SpreadMetrics"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -69,8 +69,15 @@ class Ratios:
     gap: Optional[float] = None
 
 @dataclass(frozen=True)
-class Metrics:
+class SpreadMetrics:
     ratios: Ratios; zscore: float; profit: float
+
+    @classmethod
+    def create(cls, /, ratios, zscore, profit):
+        assert isinstance(ratios, dict) and isinstance(zscore, float) and isinstance(profit, float)
+        ratios = {field: ratios.get(field, None) for field in fields(Ratios)}
+        ratios = Ratios(**ratios)
+        return cls(ratios, zscore, profit)
 
 
 class SpreadMeta(RegistryMeta): pass
