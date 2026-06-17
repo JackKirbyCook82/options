@@ -27,11 +27,17 @@ class Window:
     outer: int = 3
     step: int = 1
 
+    def __call__(self, centers):
+        pass
+
 @dataclass(frozen=True)
 class Radius:
     inner: float = 0.05
     outer: float = 0.12
     step: float = 0.01
+
+    def __call__(self, centers):
+        pass
 
 @dataclass(frozen=True)
 class Tau:
@@ -77,7 +83,6 @@ class LocalizingCalculator(Alerting):
 
     def calculator(self, options):
         centers, history = self.centers(options), list()
-
 
 
 #    def calculator(self, options):
