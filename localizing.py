@@ -8,8 +8,9 @@ Created on Fri Apr 10 2026
 
 import numpy as np
 import pandas as pd
-from typing import Any
+from numpy.typing import NDArray
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from finance.variables import Alerting, Enumerations
 from support.custom import NumRange
@@ -22,16 +23,14 @@ __license__ = "MIT License"
 
 
 @dataclass(frozen=True)
-class Local:
-    population: Any; center: Any; span: Any
-
-
-@dataclass(frozen=True)
 class Windows:
     inner: int = 1; outer: int = 3; step: int = 1
 
     def __iter__(self):
         return range(self.inner, self.outer + 1, self.step)
+
+@dataclass(frozen=True)
+class Tau: population: NDArray[np.floating]; center: float; span: int
 
 @dataclass(frozen=True)
 class Taus:
@@ -46,7 +45,7 @@ class Taus:
                 if len(population) == 0: continue
                 size = float(np.max(population) - np.min(population))
                 if size > self.limit: continue
-                yield Local(population=population, center=center, span=window)
+                yield Tau(population=population, center=center, span=window)
 
 
 @dataclass(frozen=True)
@@ -55,22 +54,26 @@ class Radii:
 
     def __iter__(self):
         radius = float(self.inner)
-        while radius <= self.outer: yield radius
+        while radius <= self.outer:
+            yield radius
+            radius += self.step
+
+@dataclass(frozen=True)
+class Mae: population: NumRange; center: float; span: float
 
 @dataclass(frozen=True)
 class Maes:
     radii: Radii; coverage: int = 10
 
-    def __call__(self, centers):
-        for center in centers:
-            for radius in self.radii:
-                population = NumRange.create([center - radius, center + radius])
-                yield Local(population=population, center=center, span=radius)
+    def __call__(self, center):
+        for radius in self.radii:
+            population = NumRange.create([center - radius, center + radius])
+            yield Mae(population=population, center=center, span=radius)
 
 
 @dataclass(frozen=True)
 class LocalizingVariables:
-    taus: Any; maes: Any
+    taus: Taus; maes: Maes
 
     @classmethod
     def create(cls, /, radius, window, coverage, limit):
@@ -78,7 +81,9 @@ class LocalizingVariables:
         assert isinstance(window, tuple) and len(window) == 3
         assert isinstance(coverage, tuple) and len(coverage) == 2
         radii = Radii(*list(map(float, radius)))
-        windows = Windows(*list(map(float, window)))
+        windows = Windows(*list(map(int, window)))
+        assert radii.step > 0 and windows.step >= 1
+        assert radii.outer >= radii.inner and windows.outer >= windows.inner
         taus = Taus(windows=windows, coverage=coverage[0], limit=float(limit))
         maes = Maes(radii=radii, coverage=coverage[1])
         return cls(taus=taus, maes=maes)
@@ -102,24 +107,25 @@ class LocalizingCalculator(Alerting):
     def calculator(self, options):
         centers, history = self.centers(options), list()
         for tau in self.variables.taus(centers.taus):
-            for mae in self.variables.maes(centers.maes):
-                localized = self.localized(options, tau, mae)
-                if self.adequate(localized) and not self.similar(localized, history):
-                    index = set(localized.index)
-                    history.append(index)
-                    variables = LocalizingVariables(tau, mae)
-                    localized.attrs["variables"] = variables
-                    yield localized
-                    break
+            for center in centers.maes:
+                for mae in self.variables.maes(center):
+                    localized = self.localized(options, tau, mae)
+                    if self.adequate(localized) and not self.similar(localized, history):
+                        index = set(localized.index)
+                        history.append(index)
+                        localized.attrs["tau"] = tau
+                        localized.attrs["mae"] = mae
+                        yield localized
+                        break
 
     def centers(self, options):
         taus = np.sort(options["tau"].unique().astype(float))
         mae = options["mae"].to_numpy(dtype=float)
         low, high = np.nanmin(mae), np.nanmax(mae)
-        step = self.variables.maes.radius.inner / 2
+        step = self.variables.maes.radii.inner / 2
         maes = np.arange(low, high + step, step, dtype=float)
         order = np.argsort(np.abs(maes))
-        return LocalizingVariables(taus, maes[order])
+        return SimpleNamespace(taus=taus, maes=maes[order])
 
     def adequate(self, localized):
         tau = localized["tau"].nunique() >= self.variables.taus.coverage

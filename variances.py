@@ -12,7 +12,6 @@ from abc import ABC
 from scipy.spatial import cKDTree
 
 from finance.variables import Alerting, Enumerations
-from scipy.stats import multivariate_t
 from support.equations import Equations
 
 __version__ = "1.0.0"
