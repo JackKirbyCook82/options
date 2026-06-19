@@ -13,7 +13,6 @@ from datetime import date as Date
 
 from finance.variables import Alerting, Enumerations
 from support.equations import Equations
-from support.calculations import Filter
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -22,7 +21,7 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class MarketFilter(Filter, Alerting, ABC):
+class MarketFilter(Alerting, Equations, ABC):
     def __call__(self, markets, *args, **kwargs):
         assert isinstance(markets, pd.DataFrame)
         if bool(markets.empty): return markets
@@ -32,6 +31,16 @@ class MarketFilter(Filter, Alerting, ABC):
         sizes = dict(previous=previous, post=post)
         self.alert(markets, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
         return markets
+
+    def filter(self, dataframe, *args, **kwargs):
+        assert isinstance(dataframe, pd.DataFrame)
+        if bool(dataframe.empty): return dataframe
+        mask = self.execute(dataframe, *args, **kwargs)
+        mask = mask.squeeze()
+        dataframe = dataframe.where(mask)
+        dataframe = dataframe.dropna(how="all", inplace=False)
+        dataframe = dataframe.reset_index(drop=True, inplace=False)
+        return dataframe
 
 
 class SanityFilter(MarketFilter, variables=["sanity"]):
@@ -43,12 +52,11 @@ class SanityFilter(MarketFilter, variables=["sanity"]):
     realistic = lambda bid, ask: ask > bid
 
 
-class ViabilityFilter(MarketFilter, variables=["viability"], defaults={"size": 5, "money": 0.20, "tight": 0.20}):
+class ViabilityFilter(MarketFilter, variables=["moneyed", "tightened", "sized"], defaults={"size": 5, "money": 0.20, "tight": 0.20}):
     viability = lambda moneyed, tightened, supplied, demanded:  np.logical_and.reduce([moneyed, tightened, supplied, demanded])
     moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
     tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
-    supplied = lambda supply, *, size: supply >= int(size)
-    demanded = lambda demand, *, size: demand >= int(size)
+    sized = lambda supply, demand, *, size:  (supply >= int(size)) & (demand >= int(size))
 
 
 class MarketCalculator(Equations, Alerting):

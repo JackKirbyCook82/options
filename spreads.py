@@ -75,7 +75,7 @@ class SpreadMetrics:
     @classmethod
     def create(cls, /, ratios, zscore, profit):
         assert isinstance(ratios, dict) and isinstance(zscore, float) and isinstance(profit, float)
-        ratios = {field: ratios.get(field, None) for field in fields(Ratios)}
+        ratios = {field.name: ratios.get(field.name, None) for field in fields(Ratios)}
         ratios = Ratios(**ratios)
         return cls(ratios, zscore, profit)
 

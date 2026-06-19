@@ -12,7 +12,6 @@ import pandas as pd
 from itertools import product
 
 from finance.variables import Alerting, Enumerations
-from support.calculations import Generator
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -25,7 +24,7 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Generator, Alerting):
+class ForwardCalculator(Alerting):
     def __init__(self, *args, tight=0.05, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
@@ -37,6 +36,16 @@ class ForwardCalculator(Generator, Alerting):
         forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
         forward = forward.reset_index(drop=True, inplace=False)
         self.alert(forward, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        return forward
+
+    def generate(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        if bool(options.empty): return options
+        generator = self.generator(options, *args, **kwargs)
+        forwards = list(generator)
+        if bool(forwards): forward = pd.concat(forwards, axis=0)
+        else: forward = pd.DataFrame(columns=options.columns)
+        forward = forward.reset_index(drop=True, inplace=False)
         return forward
 
     def generator(self, options, *args, **kwargs):
