@@ -8,7 +8,6 @@ Created on Mon Mar 23 2026
 
 import numpy as np
 import pandas as pd
-from abc import ABC
 from datetime import date as Date
 
 from finance.variables import Alerting, Enumerations
@@ -16,12 +15,28 @@ from support.equations import Equations
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["SanityFilter", "ViabilityFilter", "MarketCalculator"]
+__all__ = ["SanityFilter", "ViabilityCalculator", "MarketCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class MarketFilter(Alerting, Equations, ABC):
+def moneyness_function(series, /, **parameters):
+    try: abs(series) <= float(parameters["moneyness"])
+    except (KeyError, TypeError): return pd.Series(True, index=series.index)
+
+def tightness_function(series, /, **parameters):
+    try: return series <= float(parameters["tightness"])
+    except (KeyError, TypeError): return pd.Series(True, index=series.index)
+
+
+class SanityFilter(Alerting, Equations, variables=["sanity"]):
+    sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
+    supplied = lambda supply: supply.notna() & (supply >= 0)
+    demanded = lambda demand: demand.notna() & (demand >= 0)
+    bided = lambda bid: bid.notna() & np.isfinite(bid) & (bid >= 0)
+    asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
+    realistic = lambda bid, ask: ask > bid
+
     def __call__(self, markets, *args, **kwargs):
         assert isinstance(markets, pd.DataFrame)
         if bool(markets.empty): return markets
@@ -43,20 +58,18 @@ class MarketFilter(Alerting, Equations, ABC):
         return dataframe
 
 
-class SanityFilter(MarketFilter, variables=["sanity"]):
-    sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
-    supplied = lambda supply: supply.notna() & (supply >= 0)
-    demanded = lambda demand: demand.notna() & (demand >= 0)
-    bided = lambda bid: bid.notna() & np.isfinite(bid) & (bid >= 0)
-    asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
-    realistic = lambda bid, ask: ask > bid
+class ViabilityCalculator(Alerting, Equations, variables=["tightened", "moneyed", "sized"], parameters={"tightness": None, "moneyness": None, "size": 1}):
+    viability = lambda moneyed, tightened, sized: np.logical_and.reduce([moneyed, tightened, sized])
+    sized = lambda supply, demand, /, **params:  (supply >= int(params["size"])) & (demand >= int(params["size"]))
+    tightened = lambda tightness, /, **params: tightness_function(tightness, **params)
+    moneyed = lambda moneyness, /, **params: moneyness_function(moneyness, **params)
 
-
-class ViabilityFilter(MarketFilter, variables=["moneyed", "tightened", "sized"], defaults={"size": 5, "money": 0.20, "tight": 0.20}):
-    viability = lambda moneyed, tightened, supplied, demanded:  np.logical_and.reduce([moneyed, tightened, supplied, demanded])
-    moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
-    tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
-    sized = lambda supply, demand, *, size:  (supply >= int(size)) & (demand >= int(size))
+    def __call__(self, markets, *args, **kwargs):
+        assert isinstance(markets, pd.DataFrame)
+        viability = self.execute(markets, *args, **kwargs)
+        viability = pd.concat([markets, viability], axis=1)
+        self.alert(viability, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        return viability
 
 
 class MarketCalculator(Equations, Alerting):
