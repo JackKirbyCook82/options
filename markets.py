@@ -32,23 +32,15 @@ class SanityFilter(Alerting, Equations, variables=["sanity"]):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         previous = len(options.index)
-        options = self.filter(options, *args, **kwargs)
+        mask = self.execute(options, *args, **kwargs).squeeze()
+        options = options.where(mask).dropna(how="all", inplace=False)
         post = len(options.index)
         sizes = dict(previous=previous, post=post)
         self.alert(options, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
         return options
 
-    def filter(self, dataframe, *args, **kwargs):
-        assert isinstance(dataframe, pd.DataFrame)
-        if bool(dataframe.empty): return dataframe
-        mask = self.execute(dataframe, *args, **kwargs)
-        mask = mask.squeeze()
-        dataframe = dataframe.where(mask)
-        dataframe = dataframe.dropna(how="all", inplace=False)
-        return dataframe
 
-
-class ViabilityCalculator(Alerting, Equations, variables=["tightened", "moneyed", "sized"], parameters={"tight": None, "money": None, "size": 1}):
+class ViabilityCalculator(Alerting, Equations, parameters={"tight": None, "money": None, "size": 1}):
     viability = lambda moneyed, tightened, sized: np.logical_and.reduce([moneyed, tightened, sized])
     sized = lambda supply, demand, *, size:  (supply >= int(size)) & (demand >= int(size))
     tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
@@ -56,10 +48,26 @@ class ViabilityCalculator(Alerting, Equations, variables=["tightened", "moneyed"
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        viability = self.execute(options, *args, **kwargs)
-        viability = pd.concat([options, viability], axis=1)
-        self.alert(viability, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        return viability
+        if bool(options.empty): return options
+        masking = self.execute(options, *args, **kwargs)
+        mask = masking["viability"]
+        previous = len(options.index)
+        options = options.where(mask).dropna(how="all", inplace=False)
+        post = len(options.index)
+        sizes = dict(previous=previous, post=post)
+        self.alert(options, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
+        self.analysis(masking, title="Knockout", **sizes)
+        return options
+
+    def analysis(self, viability, *args, title, previous, post, **kwargs):
+        tight = kwargs.get("tight", self.constants.get("tight", None))
+        money = kwargs.get("money", self.constants.get("money", None))
+        size = kwargs.get("size", self.constants.get("size", None))
+        criteria = [f"{1 - int(post) / int(previous):.0f}% Total"]
+        if size is not None: criteria.append(f"{(~viability['sized']).sum() / len(viability.index):.0f}% @ Size={int(size):.0f}")
+        if money is not None: criteria.append(f"{(~viability['moneyed']).sum() / len(viability.index):.0f}% @ Money={float(money):.02f}")
+        if tight is not None: criteria.append(f"{(~viability['tightened']).sum() / len(viability.index):.0f}% @ Tight={float(tight):.02f}")
+        self.console(str(title), f"Options[{', '.join(reversed(criteria))}]")
 
 
 class MarketCalculator(Alerting, Equations):
