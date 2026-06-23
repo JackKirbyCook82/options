@@ -33,8 +33,7 @@ class ForwardCalculator(Alerting):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         forward = self.generate(options, *args, **kwargs)
-        forward = forward.sort_values(by=["ticker", "expire", "strike"], ascending=[True, True, True], inplace=False)
-        forward = forward.reset_index(drop=True, inplace=False)
+        forward = forward.sort_index(inplace=False)
         self.alert(forward, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return forward
 
@@ -45,7 +44,6 @@ class ForwardCalculator(Alerting):
         forwards = list(generator)
         if bool(forwards): forward = pd.concat(forwards, axis=0)
         else: forward = pd.DataFrame(columns=options.columns)
-        forward = forward.reset_index(drop=True, inplace=False)
         return forward
 
     def generator(self, options, *args, **kwargs):

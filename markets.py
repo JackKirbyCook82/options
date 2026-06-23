@@ -20,15 +20,6 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-def moneyness_function(series, /, **parameters):
-    try: abs(series) <= float(parameters["moneyness"])
-    except (KeyError, TypeError): return pd.Series(True, index=series.index)
-
-def tightness_function(series, /, **parameters):
-    try: return series <= float(parameters["tightness"])
-    except (KeyError, TypeError): return pd.Series(True, index=series.index)
-
-
 class SanityFilter(Alerting, Equations, variables=["sanity"]):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
     supplied = lambda supply: supply.notna() & (supply >= 0)
@@ -37,15 +28,15 @@ class SanityFilter(Alerting, Equations, variables=["sanity"]):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
-    def __call__(self, markets, *args, **kwargs):
-        assert isinstance(markets, pd.DataFrame)
-        if bool(markets.empty): return markets
-        previous = len(markets.index)
-        markets = self.filter(markets, *args, **kwargs)
-        post = len(markets.index)
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        if bool(options.empty): return options
+        previous = len(options.index)
+        options = self.filter(options, *args, **kwargs)
+        post = len(options.index)
         sizes = dict(previous=previous, post=post)
-        self.alert(markets, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
-        return markets
+        self.alert(options, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
+        return options
 
     def filter(self, dataframe, *args, **kwargs):
         assert isinstance(dataframe, pd.DataFrame)
@@ -54,25 +45,24 @@ class SanityFilter(Alerting, Equations, variables=["sanity"]):
         mask = mask.squeeze()
         dataframe = dataframe.where(mask)
         dataframe = dataframe.dropna(how="all", inplace=False)
-        dataframe = dataframe.reset_index(drop=True, inplace=False)
         return dataframe
 
 
-class ViabilityCalculator(Alerting, Equations, variables=["tightened", "moneyed", "sized"], parameters={"tightness": None, "moneyness": None, "size": 1}):
+class ViabilityCalculator(Alerting, Equations, variables=["tightened", "moneyed", "sized"], parameters={"tight": None, "money": None, "size": 1}):
     viability = lambda moneyed, tightened, sized: np.logical_and.reduce([moneyed, tightened, sized])
-    sized = lambda supply, demand, /, **params:  (supply >= int(params["size"])) & (demand >= int(params["size"]))
-    tightened = lambda tightness, /, **params: tightness_function(tightness, **params)
-    moneyed = lambda moneyness, /, **params: moneyness_function(moneyness, **params)
+    sized = lambda supply, demand, *, size:  (supply >= int(size)) & (demand >= int(size))
+    tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
+    moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
 
-    def __call__(self, markets, *args, **kwargs):
-        assert isinstance(markets, pd.DataFrame)
-        viability = self.execute(markets, *args, **kwargs)
-        viability = pd.concat([markets, viability], axis=1)
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        viability = self.execute(options, *args, **kwargs)
+        viability = pd.concat([options, viability], axis=1)
         self.alert(viability, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return viability
 
 
-class MarketCalculator(Equations, Alerting):
+class MarketCalculator(Alerting, Equations):
     moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
