@@ -11,7 +11,8 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.variables import Alerting, Enumerations
+from finance.variables import Enumerations
+from finance.logging import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -168,7 +169,7 @@ def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     return σ
 
 
-class VolatilityCalculator(Alerting):
+class VolatilityCalculator(Logging):
     def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
@@ -183,7 +184,7 @@ class VolatilityCalculator(Alerting):
         volatility = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         volatility = pd.Series(volatility, name="implied")
         volatility = pd.concat([options, volatility], axis=1)
-        self.alert(volatility, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(volatility, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return volatility
 
     @property

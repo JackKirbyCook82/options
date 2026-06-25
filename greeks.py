@@ -11,7 +11,8 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.variables import Alerting, Enumerations
+from finance.variables import Enumerations
+from finance.logging import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -138,7 +139,7 @@ def calculation(x, k, τ, σ, i, r, q):
     return Δ, Γ, Θ, Ρ, V, Φ, Ψ, Χ
 
 
-class GreekCalculator(Alerting):
+class GreekCalculator(Logging):
     def __call__(self, options, *args, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
         spot = options["spot"].to_numpy(np.float64)
@@ -150,7 +151,7 @@ class GreekCalculator(Alerting):
         greeks = dict(zip(["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"], greeks))
         greeks = pd.DataFrame(greeks)
         greeks = pd.concat([options, greeks], axis=1)
-        self.alert(greeks, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(greeks, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return greeks
 
 

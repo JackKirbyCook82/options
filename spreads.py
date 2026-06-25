@@ -13,7 +13,9 @@ from abc import ABC, abstractmethod
 from functools import total_ordering
 from dataclasses import dataclass, fields
 
-from finance.variables import Alerting, Enumerations, Specifications, OSI
+from finance.variables import Enumerations, Specifications
+from finance.logging import Logging
+from finance.osi import OSI
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -255,7 +257,7 @@ class CalendarCreator(SpreadCreator, register=Enumerations.Spread.CALENDAR):
     def create(located): return Spread[Enumerations.Spread.CALENDAR](located)
 
 
-class SpreadCalculator(Alerting):
+class SpreadCalculator(Logging):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         assert isinstance(limit, int) and limit > 0
         super().__init__(*args, **kwargs)
@@ -267,7 +269,7 @@ class SpreadCalculator(Alerting):
         generator = self.calculator(options, *args, **kwargs)
         spreads = list(generator)
         sizes = dict(previous=len(options), post=len(spreads))
-        self.alert(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
+        self.results(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
         return spreads
 
     def calculator(self, options, *args, **kwargs):

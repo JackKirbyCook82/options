@@ -11,7 +11,8 @@ import numpy as np
 import pandas as pd
 from itertools import product
 
-from finance.variables import Alerting, Enumerations
+from finance.variables import Enumerations
+from finance.logging import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -24,7 +25,7 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Alerting):
+class ForwardCalculator(Logging):
     def __init__(self, *args, tight=0.05, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
@@ -34,7 +35,7 @@ class ForwardCalculator(Alerting):
         assert isinstance(options, pd.DataFrame)
         forward = self.generate(options, *args, **kwargs)
         forward = forward.sort_index(inplace=False)
-        self.alert(forward, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(forward, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return forward
 
     def generate(self, options, *args, **kwargs):

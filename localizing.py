@@ -12,7 +12,8 @@ from numpy.typing import NDArray
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from finance.variables import Alerting, Enumerations
+from finance.variables import Enumerations
+from finance.logging import Logging
 from support.custom import NumRange
 
 __version__ = "1.0.0"
@@ -89,7 +90,7 @@ class LocalizingVariables:
         return cls(taus=taus, maes=maes)
 
 
-class LocalizingCalculator(Alerting):
+class LocalizingCalculator(Logging):
     def __init__(self, *args, variables, samples=35, overlap=0.80, **kwargs):
         assert isinstance(variables, LocalizingVariables)
         super().__init__(*args, **kwargs)
@@ -101,7 +102,7 @@ class LocalizingCalculator(Alerting):
         assert isinstance(options, pd.DataFrame)
         options = options[options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()].copy()
         for local in self.calculator(options):
-            self.alert(local, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+            self.results(local, title="Calculated", instrument=Enumerations.Instrument.OPTION)
             yield local
 
     def calculator(self, options):
