@@ -13,6 +13,7 @@ from datetime import date as Date
 from finance.variables import Enumerations
 from finance.logging import Logging
 from support.equations import Equations
+from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -33,8 +34,8 @@ class SanityFilter(Logging, Equations, variables=["sanity"]):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         previous = len(options.index)
-        mask = self.execute(options, *args, **kwargs).squeeze()
-        options = options.where(mask).dropna(how="all", inplace=False)
+        sanity = self.execute(options, *args, **kwargs).squeeze()
+        options = options.where(sanity).dropna(how="all", inplace=False)
         post = len(options.index)
         sizes = dict(previous=previous, post=post)
         self.results(options, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
@@ -50,20 +51,18 @@ class ViabilityCalculator(Logging, Equations, parameters={"tight": None, "money"
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        masking = self.execute(options, *args, **kwargs)
-        mask = masking["viability"]
+        viabilities = self.execute(options, *args, **kwargs)
         previous = len(options.index)
-        options = options.where(mask).dropna(how="all", inplace=False)
+        options = options.where(viabilities["viability"]).dropna(how="all", inplace=False)
         post = len(options.index)
         sizes = dict(previous=previous, post=post)
-        self.results(options, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
-        self.analysis(masking, title="Filtered")
+        self.results(options, viabilities, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
         return options
 
-    def analysis(self, viability, *args, title, **kwargs):
-        tightness = (viability['sized']).sum() / len(viability.index) * 100
-        moneyness = (viability['moneyed']).sum() / len(viability.index) * 100
-        sizing = (viability['tightened']).sum() / len(viability.index) * 100
+    def results(self, options, viabilities, *args, **kwargs):
+        tightness = (viabilities['sized']).sum() / len(viabilities.index) * 100
+        moneyness = (viabilities['moneyed']).sum() / len(viabilities.index) * 100
+        sizing = (viabilities['tightened']).sum() / len(viabilities.index) * 100
         strings = list()
         try: strings.append(f"Tightness<={self.constants['tight']:.2f}: {tightness:.0f}%")
         except KeyError: pass
@@ -71,7 +70,30 @@ class ViabilityCalculator(Logging, Equations, parameters={"tight": None, "money"
         except KeyError: pass
         try: strings.append(f"Sizing>={self.constants['size']:.0f}: {sizing:.0f}%")
         except KeyError: pass
-        self.console(str(title), f"Options[{', '.join(strings)}]")
+        super().results(options, *args, **kwargs)
+        self.console("Filtered", f"Options[{', '.join(strings)}]")
+
+
+class ViabilityAnalyzer(Logging):
+    def __init__(self, *args, tight, money, size, gridsize=25, **kwargs):
+        assert isinstance(tight, NumRange) and isinstance(money, NumRange) and isinstance(size, int)
+        super().__init__(*args, **kwargs)
+        self.__tight = np.linspace(tight.minimum, tight.maximum, gridsize)
+        self.__money = np.linspace(money.minimum, money.maximum, gridsize)
+        self.__size = int(size)
+
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        if bool(options.empty): return
+
+        # CHATGPT CODE WILL GO HERE
+
+    @property
+    def tight(self): return self.__tight
+    @property
+    def money(self): return self.__money
+    @property
+    def size(self): return self.__size
 
 
 class MarketCalculator(Logging, Equations):
