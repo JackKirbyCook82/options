@@ -8,7 +8,9 @@ Created on Mon Mar 23 2026
 
 import numpy as np
 import pandas as pd
+from itertools import product
 from datetime import date as Date
+from dataclasses import dataclass
 
 from finance.variables import Enumerations
 from finance.logging import Logging
@@ -17,9 +19,20 @@ from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["SanityFilter", "ViabilityCalculator", "MarketCalculator"]
+__all__ = ["SanityFilter", "SurvivalCalculator", "ViabilityCalculator", "MarketCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass(frozen=True)
+class Viability:
+    tight: float | NumRange; money: float | NumRange; size: int | NumRange
+
+    def __iter__(self): yield self.tight; yield self.money; yield self.size
+    def __call__(self, gridsize):
+        function = lambda variable: np.linspace(variable.minimum, variable.maximum, gridsize) if isinstance(variable, NumRange) else np.array([variable])
+        variables = [function(variable) for variable in iter(self)]
+        yield from product(*variables)
 
 
 class SanityFilter(Logging, Equations, variables=["sanity"]):
@@ -74,26 +87,45 @@ class ViabilityCalculator(Logging, Equations, parameters={"tight": None, "money"
         self.console("Filtered", f"Options[{', '.join(strings)}]")
 
 
-class ViabilityAnalyzer(Logging):
+class SurvivalCalculator(Logging):
     def __init__(self, *args, tight, money, size, gridsize=25, **kwargs):
-        assert isinstance(tight, NumRange) and isinstance(money, NumRange) and isinstance(size, int)
+        assert isinstance(tight, (float, NumRange)) and isinstance(money, (float, NumRange)) and isinstance(size, (int, NumRange))
+        assert isinstance(gridsize, int)
         super().__init__(*args, **kwargs)
-        self.__tight = np.linspace(tight.minimum, tight.maximum, gridsize)
-        self.__money = np.linspace(money.minimum, money.maximum, gridsize)
-        self.__size = int(size)
+        self.__viability = Viability(tight, money, size)
+        self.__gridsize = gridsize
 
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        if bool(options.empty): return
+        survivals = self.generate(options, *args, **kwargs)
+        self.results(options, title="Analyzed", instrument=Enumerations.Instrument.OPTION)
+        return survivals
 
-        # CHATGPT CODE WILL GO HERE
+    def generate(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        generator = self.generator(options, *args, **kwargs)
+        survivals = list(generator)
+        survivals = pd.DataFrame(survivals)
+        return survivals
+
+    def generator(self, options, *args, **kwargs):
+        moneyness = np.abs(pd.to_numeric(options["moneyness"], errors="coerce"))
+        tightness = pd.to_numeric(options["tightness"], errors="coerce")
+        supply = pd.to_numeric(options["supply"], errors="coerce")
+        demand = pd.to_numeric(options["demand"], errors="coerce")
+        gridsize = int(self.gridsize)
+        for tight, money, size in self.viability(gridsize):
+            sized = (supply >= size) & (demand >= size)
+            tightened = tightness <= tight
+            moneyed = moneyness <= money
+            viable = sized & tightened & moneyed
+            survival = int(viable.sum())
+            yield dict(tightness=tight, moneyness=money, sizing=size, survival=survival)
 
     @property
-    def tight(self): return self.__tight
+    def viability(self): return self.__viability
     @property
-    def money(self): return self.__money
-    @property
-    def size(self): return self.__size
+    def gridsize(self): return self.__gridsize
 
 
 class MarketCalculator(Logging, Equations):

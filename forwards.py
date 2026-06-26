@@ -40,7 +40,6 @@ class ForwardCalculator(Logging):
 
     def generate(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        if bool(options.empty): return options
         generator = self.generator(options, *args, **kwargs)
         forwards = list(generator)
         if bool(forwards): forward = pd.concat(forwards, axis=0)
