@@ -140,7 +140,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekCalculator(Logging):
-    def __call__(self, options, *args, interest, dividends, inplace=False, **kwargs):
+    def __call__(self, options, *args, interest, dividends, include=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         spot = options["spot"].to_numpy(np.float64)
         strike = options["strike"].to_numpy(np.float64)
@@ -151,7 +151,7 @@ class GreekCalculator(Logging):
         greeks = dict(zip(["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"], greeks))
         greeks = pd.DataFrame(greeks, index=options.index)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        if not inplace: return greeks
+        if not include: return greeks
         else: return pd.concat([options, greeks], axis=1)
 
 

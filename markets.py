@@ -45,11 +45,11 @@ class MarketCalculator(Logging, Equations):
     median = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
-    def __call__(self, options, *args, inplace=False, **kwargs):
+    def __call__(self, options, *args, include=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         markets = self.execute(options, *args, **kwargs)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        if not inplace: return markets
+        if not include: return markets
         else: return pd.concat([options, markets], axis=1)
 
 

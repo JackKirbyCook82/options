@@ -31,7 +31,7 @@ class ForwardCalculator(Logging):
         self.__samplesize = int(samplesize)
         self.__tightness = float(tight)
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, *args, include=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         forward = self.generate(options, *args, **kwargs)
         forward = forward.sort_index(inplace=False)

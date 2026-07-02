@@ -66,7 +66,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class ValuationCalculator(Logging):
-    def __call__(self, options, *args, interest, dividends, inplace=False, **kwargs):
+    def __call__(self, options, *args, interest, dividends, include=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
@@ -76,7 +76,7 @@ class ValuationCalculator(Logging):
         valuation = calculation(x, k, τ, σ, i, float(interest), float(dividends))
         valuation = pd.Series(valuation, name="value", index=options.index)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        if not inplace: return valuation
+        if not include: return valuation
         else: return pd.concat([options, valuation], axis=1)
 
 

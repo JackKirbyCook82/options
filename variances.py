@@ -111,7 +111,7 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
 
 
 class StandardizingCalculator(NeighborhoodCalculator):
-    def __call__(self, options, surface, *args, inplace=False, **kwargs):
+    def __call__(self, options, surface, *args, include=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)
@@ -119,7 +119,7 @@ class StandardizingCalculator(NeighborhoodCalculator):
         standard = self.standard(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="zscore", index=options.index)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        if not inplace: return standard
+        if not include: return standard
         else: return pd.concat([options, standard], axis=1)
 
     def standard(self, t, k, w, f):
