@@ -94,9 +94,6 @@ class Spread(ABC, metaclass=SpreadMeta):
         self.__type = types[0]
         self.__legs = legs
 
-    def __str__(self):
-        pass
-
     @property
     def osi(self): return self.legs[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
     @property
