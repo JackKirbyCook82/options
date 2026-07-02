@@ -88,13 +88,14 @@ class Spread(ABC, metaclass=SpreadMeta):
     def __init__(self, legs):
         assert isinstance(legs, pd.DataFrame)
         tickers = list(legs["ticker"].unique())
-        expires = legs["expire"].to_list()
         types = list(legs["spread"].unique())
         assert len(tickers) == 1 and len(types) == 1
-        self.__expires = DateRange.create(expires)
         self.__ticker = str(tickers[0])
         self.__type = types[0]
         self.__legs = legs
+
+    def __str__(self):
+        pass
 
     @property
     def osi(self): return self.legs[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
@@ -133,6 +134,18 @@ class Spread(ABC, metaclass=SpreadMeta):
         return Ratios(gamma=gamma, theta=theta, vega=vega, gap=gap)
 
     @property
+    def tightness(self): return self.legs["tightness"].max()
+    @property
+    def moneyness(self): return self.legs["moneyness"].max()
+    @property
+    def activity(self): return self.legs["activity"].min()
+
+    @property
+    def expires(self):
+        expires = self.legs["expire"].to_list()
+        return DateRange.create(expires)
+
+    @property
     def position(self): return self.legs["position"]
     @property
     def quantity(self): return self.legs["quantity"]
@@ -141,8 +154,6 @@ class Spread(ABC, metaclass=SpreadMeta):
     @abstractmethod
     def zscore(self): pass
 
-    @property
-    def expires(self): return self.__expires
     @property
     def ticker(self): return self.__ticker
     @property
