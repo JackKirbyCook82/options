@@ -174,7 +174,7 @@ class VolatilityCalculator(Logging):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    def __call__(self, options, *args, interest, dividends, **kwargs):
+    def __call__(self, options, *args, interest, dividends, inplace=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         y = options["median"].to_numpy(np.float64)
         x = options["spot"].to_numpy(np.float64)
@@ -183,9 +183,9 @@ class VolatilityCalculator(Logging):
         i = options["option"].apply(int).to_numpy(np.int8)
         volatility = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         volatility = pd.Series(volatility, name="implied", index=options.index)
-        volatility = pd.concat([options, volatility], axis=1)
-        self.results(volatility, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        return volatility
+        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        if not inplace: return volatility
+        else: return pd.concat([options, volatility], axis=1)
 
     @property
     def hyperparams(self): return self.__hyperparams
