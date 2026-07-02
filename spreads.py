@@ -16,6 +16,7 @@ from dataclasses import dataclass, fields
 from finance.variables import Enumerations, Specifications
 from finance.logging import Logging
 from finance.osi import OSI
+from support.custom import DateRange
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -87,8 +88,10 @@ class Spread(ABC, metaclass=SpreadMeta):
     def __init__(self, legs):
         assert isinstance(legs, pd.DataFrame)
         tickers = list(legs["ticker"].unique())
+        expires = legs["expire"].to_list()
         types = list(legs["spread"].unique())
         assert len(tickers) == 1 and len(types) == 1
+        self.__expires = DateRange.create(expires)
         self.__ticker = str(tickers[0])
         self.__type = types[0]
         self.__legs = legs
@@ -138,6 +141,8 @@ class Spread(ABC, metaclass=SpreadMeta):
     @abstractmethod
     def zscore(self): pass
 
+    @property
+    def expires(self): return self.__expires
     @property
     def ticker(self): return self.__ticker
     @property

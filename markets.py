@@ -77,14 +77,32 @@ class ViabilityCalculator(Logging, Equations, parameters={"tight": None, "money"
         moneyness = (viabilities['moneyed']).sum() / len(viabilities.index) * 100
         sizing = (viabilities['tightened']).sum() / len(viabilities.index) * 100
         strings = list()
-        try: strings.append(f"Tightness<={self.constants['tight']:.2f}: {tightness:.0f}%")
+        try: strings.append(f"Tight<={self.constants['tight']:.2f}: {tightness:.0f}%")
         except KeyError: pass
-        try: strings.append(f"Moneyness<={self.constants['money']:.2f}: {moneyness:.0f}%")
+        try: strings.append(f"Money<={self.constants['money']:.2f}: {moneyness:.0f}%")
         except KeyError: pass
-        try: strings.append(f"Sizing>={self.constants['size']:.0f}: {sizing:.0f}%")
+        try: strings.append(f"Size>={self.constants['size']:.0f}: {sizing:.0f}%")
         except KeyError: pass
         super().results(options, *args, **kwargs)
         self.console("Filtered", f"Options[{', '.join(strings)}]")
+
+
+class MarketCalculator(Logging, Equations):
+    moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
+    tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
+    dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
+    quality = lambda activity, tightness: activity / (tightness ** 2 + 1e-6)
+    activity = lambda supply, demand: np.sqrt(1 + demand + supply)
+    tightness = lambda gap, median: gap / median
+    median = lambda bid, ask: (bid + ask) / 2
+    gap = lambda bid, ask: ask - bid
+
+    def __call__(self, options, *args, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        markets = self.execute(options, *args, **kwargs)
+        markets = pd.concat([options, markets], axis=1)
+        self.results(markets, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        return markets
 
 
 class SurvivalCalculator(Logging):
@@ -127,23 +145,6 @@ class SurvivalCalculator(Logging):
     @property
     def gridsize(self): return self.__gridsize
 
-
-class MarketCalculator(Logging, Equations):
-    moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
-    tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
-    dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
-    quality = lambda activity, tightness: activity / (tightness ** 2 + 1e-6)
-    activity = lambda supply, demand: np.sqrt(1 + demand + supply)
-    tightness = lambda gap, median: gap / median
-    median = lambda bid, ask: (bid + ask) / 2
-    gap = lambda bid, ask: ask - bid
-
-    def __call__(self, options, *args, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        markets = self.execute(options, *args, **kwargs)
-        markets = pd.concat([options, markets], axis=1)
-        self.results(markets, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        return markets
 
 
 
