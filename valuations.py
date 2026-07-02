@@ -73,11 +73,11 @@ class ValuationCalculator(Logging):
         τ = options["tau"].to_numpy(np.float64)
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        valuation = calculation(x, k, τ, σ, i, float(interest), float(dividends))
-        valuation = pd.Series(valuation, name="value", index=options.index)
+        valuations = calculation(x, k, τ, σ, i, float(interest), float(dividends))
+        valuations = pd.Series(valuations, name="value", index=options.index)
+        options = pd.concat([options, valuations], axis=1)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        if not include: return valuation
-        else: return pd.concat([options, valuation], axis=1)
+        return options
 
 
 

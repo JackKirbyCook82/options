@@ -103,24 +103,24 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
     def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         variance = self.execute(options, *args, **kwargs)
-        variance = pd.concat([options, variance], axis=1)
-        variance = self.clean(variance)
-        variance = self.screen(variance)
-        self.results(variance, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        return variance
+        options = pd.concat([options, variance], axis=1)
+        options = self.clean(options)
+        options = self.screen(options)
+        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        return options
 
 
 class StandardizingCalculator(NeighborhoodCalculator):
-    def __call__(self, options, surface, *args, include=False, **kwargs):
+    def __call__(self, options, surface, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standard(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="zscore", index=options.index)
+        options = pd.concat([options, standard], axis=1)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        if not include: return standard
-        else: return pd.concat([options, standard], axis=1)
+        return options
 
     def standard(self, t, k, w, f):
         μ = np.vectorize(f.z)(t, k)

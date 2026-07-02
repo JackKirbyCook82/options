@@ -181,11 +181,11 @@ class VolatilityCalculator(Logging):
         k = options["strike"].to_numpy(np.float64)
         τ = options["tau"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        volatility = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
-        volatility = pd.Series(volatility, name="implied", index=options.index)
+        volatilities = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
+        volatilities = pd.Series(volatilities, name="implied", index=options.index)
+        options = pd.concat([options, volatilities], axis=1)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        if not include: return volatility
-        else: return pd.concat([options, volatility], axis=1)
+        return options
 
     @property
     def hyperparams(self): return self.__hyperparams

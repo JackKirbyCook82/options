@@ -31,24 +31,24 @@ class ForwardCalculator(Logging):
         self.__samplesize = int(samplesize)
         self.__tightness = float(tight)
 
-    def __call__(self, options, *args, include=False, **kwargs):
+    def __call__(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        forward = self.generate(options, *args, **kwargs)
-        forward = forward.sort_index(inplace=False)
-        self.results(forward, title="Calculated", instrument=Enumerations.Instrument.OPTION)
-        return forward
+        options = self.generate(options, *args, **kwargs)
+        options = options.sort_index(inplace=False)
+        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        return options
 
     def generate(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
         generator = self.generator(options, *args, **kwargs)
-        forwards = list(generator)
-        if bool(forwards): forward = pd.concat(forwards, axis=0)
-        else: forward = pd.DataFrame(columns=options.columns)
-        return forward
+        options = list(generator)
+        if bool(options): options = pd.concat(options, axis=0)
+        else: options = pd.DataFrame(columns=options.columns)
+        return options
 
     def generator(self, options, *args, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        for (ticker, expire), options in options.groupby(["ticker", "expire"]):
+        for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
             spot = options["spot"].dropna(inplace=False).to_numpy()
             tau = options["tau"].dropna(inplace=False).to_numpy()
             constants = dict(spot=spot[0], tau=tau[0])
