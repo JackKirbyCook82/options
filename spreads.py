@@ -9,6 +9,7 @@ Created on Sat May 16 2026
 import numpy as np
 import pandas as pd
 from typing import Optional
+from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import total_ordering
 from dataclasses import dataclass, fields
@@ -93,6 +94,15 @@ class Spread(ABC, metaclass=SpreadMeta):
         self.__ticker = str(tickers[0])
         self.__type = types[0]
         self.__legs = legs
+
+    @property
+    def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self.records)
+    @property
+    def records(self):
+        function = lambda value: (str(value[0]), int(value[1]), int(value[3]))
+        keys, values = ["osi", "position", "quantity"], list(zip(self.osi, self.position, self.quantity))
+        records = [dict(zip(keys, value)) for value in sorted(values, key=function)]
+        return [SimpleNamespace(**record) for record in records]
 
     @property
     def osi(self): return self.legs[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
