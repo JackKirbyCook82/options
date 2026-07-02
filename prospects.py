@@ -61,8 +61,7 @@ class PriorityCalculator(Logging):
         assert isinstance(prospects, list)
         if not prospects: return prospects
         priorities = self.calculate(prospects, *args, **kwargs)
-        sizes = dict(previous=len(prospects), post=len(priorities))
-        self.results(prospects, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
+        self.results(prospects, title="Calculator", instrument=Enumerations.Instrument.SPREAD)
         return priorities
 
     def calculate(self, prospects, *args, **kwargs):

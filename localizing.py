@@ -28,7 +28,7 @@ class Windows:
     inner: int = 1; outer: int = 3; step: int = 1
 
     def __iter__(self):
-        return range(self.inner, self.outer + 1, self.step)
+        yield from range(self.inner, self.outer + 1, self.step)
 
 @dataclass(frozen=True)
 class Tau: population: NDArray[np.floating]; center: float; span: int

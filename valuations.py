@@ -74,7 +74,7 @@ class ValuationCalculator(Logging):
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
         valuation = calculation(x, k, τ, σ, i, float(interest), float(dividends))
-        valuation = pd.Series(valuation, name="value")
+        valuation = pd.Series(valuation, name="value", index=options.index)
         valuation = pd.concat([options, valuation], axis=1)
         self.results(valuation, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return valuation

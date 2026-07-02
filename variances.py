@@ -117,7 +117,7 @@ class StandardizingCalculator(NeighborhoodCalculator):
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standard(tau, mae, tiv, surface)
-        standard = pd.Series(standard, index=options.index, name="zscore")
+        standard = pd.Series(standard, name="zscore", index=options.index)
         standard = pd.concat([options, standard], axis=1)
         self.results(standard, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return standard

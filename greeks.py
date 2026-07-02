@@ -149,7 +149,7 @@ class GreekCalculator(Logging):
         option = options["option"].apply(int).to_numpy(np.int8)
         greeks = list(calculation(spot, strike, tau, implied, option, float(interest), float(dividends)))
         greeks = dict(zip(["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"], greeks))
-        greeks = pd.DataFrame(greeks)
+        greeks = pd.DataFrame(greeks, index=options.index)
         greeks = pd.concat([options, greeks], axis=1)
         self.results(greeks, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return greeks

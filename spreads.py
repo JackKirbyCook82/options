@@ -268,8 +268,7 @@ class SpreadCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         generator = self.calculator(options, *args, **kwargs)
         spreads = list(generator)
-        sizes = dict(previous=len(options), post=len(spreads))
-        self.results(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
+        self.results(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD)
         return spreads
 
     def calculator(self, options, *args, **kwargs):
