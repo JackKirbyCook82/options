@@ -99,7 +99,7 @@ class Spread(ABC, metaclass=SpreadMeta):
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self.records)
     @property
     def records(self):
-        function = lambda value: (str(value[0]), int(value[1]), int(value[3]))
+        function = lambda value: (str(value[0]), int(value[1]), int(value[2]))
         keys, values = ["osi", "position", "quantity"], list(zip(self.osi, self.position, self.quantity))
         records = [dict(zip(keys, value)) for value in sorted(values, key=function)]
         return [SimpleNamespace(**record) for record in records]
