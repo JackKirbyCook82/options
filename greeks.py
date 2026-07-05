@@ -140,7 +140,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekCalculator(Logging):
-    def __call__(self, options, *args, interest, dividends, **kwargs):
+    def __call__(self, options, /, interest, dividends, **kwargs):
         assert isinstance(options, pd.DataFrame)
         spot = options["spot"].to_numpy(np.float64)
         strike = options["strike"].to_numpy(np.float64)

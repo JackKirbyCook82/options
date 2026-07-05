@@ -22,16 +22,16 @@ class ProspectCalculator(Logging):
         metrics = {Enumerations.Spread(key): value for key, value in metrics.items()}
         self.__metrics = metrics
 
-    def __call__(self, spreads, *args, **kwargs):
+    def __call__(self, spreads, /, **kwargs):
         assert isinstance(spreads, list)
         if not spreads: return spreads
-        generator = self.calculator(spreads, *args, **kwargs)
+        generator = self.calculator(spreads, **kwargs)
         prospects = list(generator)
         sizes = dict(previous=len(spreads), post=len(prospects))
         self.results(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD, **sizes)
         return prospects
 
-    def calculator(self, spreads, *args, **kwargs):
+    def calculator(self, spreads, /, **kwargs):
         assert isinstance(spreads, list)
         for spread in spreads:
             metrics = self.metrics[spread.type]
@@ -57,14 +57,14 @@ class ProspectCalculator(Logging):
 
 
 class PriorityCalculator(Logging):
-    def __call__(self, prospects, *args, **kwargs):
+    def __call__(self, prospects, /, **kwargs):
         assert isinstance(prospects, list)
         if not prospects: return prospects
-        priorities = self.calculate(prospects, *args, **kwargs)
+        priorities = self.calculate(prospects, **kwargs)
         self.results(prospects, title="Calculator", instrument=Enumerations.Instrument.SPREAD)
         return priorities
 
-    def calculate(self, prospects, *args, **kwargs):
+    def calculate(self, prospects, /, **kwargs):
         assert isinstance(prospects, list)
         metrics = lambda spread: spread.score
         return self.priority(prospects, metrics)

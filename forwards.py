@@ -31,22 +31,22 @@ class ForwardCalculator(Logging):
         self.__samplesize = int(samplesize)
         self.__tightness = float(tight)
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        options = self.generate(options, *args, **kwargs)
+        options = self.generate(options, **kwargs)
         options = options.sort_index(inplace=False)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return options
 
-    def generate(self, options, *args, **kwargs):
+    def generate(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        generator = self.generator(options, *args, **kwargs)
+        generator = self.generator(options, **kwargs)
         options = list(generator)
         if bool(options): options = pd.concat(options, axis=0)
         else: options = pd.DataFrame(columns=options.columns)
         return options
 
-    def generator(self, options, *args, **kwargs):
+    def generator(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
             spot = options["spot"].dropna(inplace=False).to_numpy()
@@ -54,27 +54,27 @@ class ForwardCalculator(Logging):
             constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:
-                samples = self.samples(options, *args, **kwargs)
+                samples = self.samples(options, **kwargs)
                 mask = samples["gap"] / samples["median"] <= self.tightness
                 samples = samples.where(mask).dropna(how="all", inplace=False)
-                weights = self.weights(samples, *args, **kwargs)
+                weights = self.weights(samples, **kwargs)
                 if len(samples) >= self.samplesize:
-                    forwards = self.primary(samples, weights, *args, **constants, **kwargs)
+                    forwards = self.primary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
                     self.console("Regression", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                     yield options
                 else:
-                    forwards = self.secondary(samples, weights, *args, **constants, **kwargs)
+                    forwards = self.secondary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
                     self.console("AverageCarry", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                     yield options
             except ForwardSampleError:
-                forwards = self.tertiary(*args, **constants, **kwargs)
+                forwards = self.tertiary(**constants, **kwargs)
                 options = options.assign(**forwards)
                 self.console("SingleCarry", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
                 yield options
 
-    def primary(self, samples, weights, *args, **kwargs):
+    def primary(self, samples, weights, /, **kwargs):
         difference = samples["difference"].to_numpy()
         strikes = samples["strike"].to_numpy()
         weights = weights.to_numpy()
@@ -82,7 +82,7 @@ class ForwardCalculator(Logging):
         return dict(forward=forward, discount=discount, error=error)
 
     @staticmethod
-    def secondary(samples, weights, *args, tau, interest, dividends, **kwargs):
+    def secondary(samples, weights, /, tau, interest, dividends, **kwargs):
         discount = np.exp(tau * (interest - dividends))
         forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
         try: forward = np.average(forwards, weights=weights)
@@ -90,13 +90,13 @@ class ForwardCalculator(Logging):
         return dict(forward=forward, discount=discount, error=np.NaN)
 
     @staticmethod
-    def tertiary(*args, spot, tau, interest, dividends, **kwargs):
+    def tertiary(spot, tau, interest, dividends, **kwargs):
         discount = np.exp(tau * (interest - dividends))
         forward = spot * discount
         return dict(forward=forward, discount=discount, error=np.NaN)
 
     @staticmethod
-    def samples(options, *args, **kwargs):
+    def samples(options, /, **kwargs):
         samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "gap", "supply", "demand"], sort=False).sort_index()
         if set(Enumerations.Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
         validity = [samples[index].notna() for index in list(product(["median", "gap"], list(Enumerations.Option)))]
@@ -112,7 +112,7 @@ class ForwardCalculator(Logging):
         return samples
 
     @staticmethod
-    def weights(samples, *args, **kwargs):
+    def weights(samples, /, **kwargs):
         activity = np.sqrt((samples["supply"] + samples["demand"]).clip(lower=0.0))
         weights = activity / samples["gap"].clip(lower=1e-6)
         return weights

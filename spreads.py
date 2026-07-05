@@ -287,14 +287,14 @@ class SpreadCalculator(Logging):
         creators = {Enumerations.Spread(spread): SpreadCreator[spread](limit=limit) for spread in spreads}
         self.__creators = creators
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        generator = self.calculator(options, *args, **kwargs)
+        generator = self.calculator(options, **kwargs)
         spreads = list(generator)
         self.results(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD)
         return spreads
 
-    def calculator(self, options, *args, **kwargs):
+    def calculator(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         for creator in self.creators.values():
             for spread in creator(options):

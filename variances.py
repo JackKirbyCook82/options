@@ -100,9 +100,9 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
     mae = lambda forward, strike, option: np.log(forward / strike.astype(float)) * option.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        variance = self.execute(options, *args, **kwargs)
+        variance = self.execute(options, **kwargs)
         options = pd.concat([options, variance], axis=1)
         options = self.clean(options)
         options = self.screen(options)
@@ -111,7 +111,7 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
 
 
 class StandardizingCalculator(NeighborhoodCalculator):
-    def __call__(self, options, surface, *args, **kwargs):
+    def __call__(self, options, surface, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)

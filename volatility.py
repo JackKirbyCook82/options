@@ -174,7 +174,7 @@ class VolatilityCalculator(Logging):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    def __call__(self, options, *args, interest, dividends, include=False, **kwargs):
+    def __call__(self, options, /, interest, dividends, include=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         y = options["median"].to_numpy(np.float64)
         x = options["spot"].to_numpy(np.float64)

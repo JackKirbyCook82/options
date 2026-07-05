@@ -98,7 +98,7 @@ class LocalizingCalculator(Logging):
         self.__overlap = float(overlap)
         self.__samples = int(samples)
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         options = options[options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()].copy()
         for local in self.calculator(options):

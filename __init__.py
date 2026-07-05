@@ -19,23 +19,12 @@ from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["MarketCalculator", "SurvivalCalculator", "SanityFilter", "ViabilityFilter"]
+__all__ = ["OptionCalculator", "SurvivalCalculator", "SanityFilter", "ViabilityFilter"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-@dataclass(frozen=True)
-class Viability:
-    tight: float | NumRange; money: float | NumRange; active: int | NumRange
-
-    def __iter__(self): yield self.tight; yield self.money; yield self.active
-    def __call__(self, gridsize):
-        function = lambda variable: np.linspace(variable.minimum, variable.maximum, gridsize) if isinstance(variable, NumRange) else np.array([variable])
-        variables = [function(variable) for variable in iter(self)]
-        yield from product(*variables)
-
-
-class MarketCalculator(Logging, Equations):
+class OptionCalculator(Logging, Equations):
     moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
@@ -45,12 +34,52 @@ class MarketCalculator(Logging, Equations):
     median = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        markets = self.execute(options, *args, **kwargs)
-        options = pd.concat([options, markets], axis=1)
+        calculated = self.execute(options, **kwargs)
+        options = pd.concat([options, calculated], axis=1)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         return options
+
+
+class SurvivalCalculator(Logging):
+    def __init__(self, *args, tight, money, active, gridsize=25, **kwargs):
+        assert isinstance(tight, (float, NumRange)) and isinstance(money, (float, NumRange)) and isinstance(active, (float, NumRange))
+        assert isinstance(gridsize, int)
+        super().__init__(*args, **kwargs)
+        self.__viability = Viability(tight, money, active)
+        self.__gridsize = gridsize
+
+    def __call__(self, options, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        survivals = self.generate(options, **kwargs)
+        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        return survivals
+
+    def generate(self, options, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        generator = self.generator(options, **kwargs)
+        survivals = list(generator)
+        survivals = pd.DataFrame(survivals)
+        return survivals
+
+    def generator(self, options, **kwargs):
+        moneyness = np.abs(pd.to_numeric(options["moneyness"], errors="coerce"))
+        tightness = pd.to_numeric(options["tightness"], errors="coerce")
+        activity = pd.to_numeric(options["activity"], errors="coerce")
+        gridsize = int(self.gridsize)
+        for tight, money, active in self.viability(gridsize):
+            activated = activity >= active
+            tightened = tightness <= tight
+            moneyed = moneyness <= money
+            viable = activated & tightened & moneyed
+            survival = int(viable.sum())
+            yield dict(tightness=tight, moneyness=money, activity=activity, survival=survival)
+
+    @property
+    def viability(self): return self.__viability
+    @property
+    def gridsize(self): return self.__gridsize
 
 
 class SanityFilter(Logging, Equations, parameters={"size": 1}):
@@ -61,10 +90,10 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        sanity = self.execute(options, *args, **kwargs).squeeze()
+        sanity = self.execute(options, **kwargs).squeeze()
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         options = self.filter(options, sanity)
         return options
@@ -78,16 +107,27 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
         return options
 
 
+@dataclass(frozen=True)
+class Viability:
+    tight: float | NumRange; money: float | NumRange; active: int | NumRange
+
+    def __iter__(self): yield self.tight; yield self.money; yield self.active
+    def __call__(self, gridsize):
+        function = lambda variable: np.linspace(variable.minimum, variable.maximum, gridsize) if isinstance(variable, NumRange) else np.array([variable])
+        variables = [function(variable) for variable in iter(self)]
+        yield from product(*variables)
+
+
 class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": None, "active": None}):
     viability = lambda moneyed, tightened, activated: np.logical_and.reduce([moneyed, tightened, activated])
     tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
     moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
     activated = lambda activity, *, active: activity >= float(active) if active is not None else pd.Series(True, index=activity.index)
 
-    def __call__(self, options, *args, **kwargs):
+    def __call__(self, options, **kwargs):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
-        viability = self.execute(options, *args, **kwargs)
+        viability = self.execute(options, **kwargs)
         self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
         options = self.filter(options, viability)
         self.breakdown(viability)
@@ -113,46 +153,6 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
         try: strings.append(f"Active>={self.constants['active']:.0f}: {activity:.0f}%")
         except KeyError: pass
         self.console("Filtered", f"Options[{', '.join(strings)}]")
-
-
-class SurvivalCalculator(Logging):
-    def __init__(self, *args, tight, money, active, gridsize=25, **kwargs):
-        assert isinstance(tight, (float, NumRange)) and isinstance(money, (float, NumRange)) and isinstance(active, (float, NumRange))
-        assert isinstance(gridsize, int)
-        super().__init__(*args, **kwargs)
-        self.__viability = Viability(tight, money, active)
-        self.__gridsize = gridsize
-
-    def __call__(self, options, *args, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        survivals = self.generate(options, *args, **kwargs)
-        self.results(options, title="Calculator", instrument=Enumerations.Instrument.OPTION)
-        return survivals
-
-    def generate(self, options, *args, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        generator = self.generator(options, *args, **kwargs)
-        survivals = list(generator)
-        survivals = pd.DataFrame(survivals)
-        return survivals
-
-    def generator(self, options, *args, **kwargs):
-        moneyness = np.abs(pd.to_numeric(options["moneyness"], errors="coerce"))
-        tightness = pd.to_numeric(options["tightness"], errors="coerce")
-        activity = pd.to_numeric(options["activity"], errors="coerce")
-        gridsize = int(self.gridsize)
-        for tight, money, active in self.viability(gridsize):
-            activated = activity >= active
-            tightened = tightness <= tight
-            moneyed = moneyness <= money
-            viable = activated & tightened & moneyed
-            survival = int(viable.sum())
-            yield dict(tightness=tight, moneyness=money, activity=activity, survival=survival)
-
-    @property
-    def viability(self): return self.__viability
-    @property
-    def gridsize(self): return self.__gridsize
 
 
 

@@ -66,7 +66,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class ValuationCalculator(Logging):
-    def __call__(self, options, *args, interest, dividends, include=False, **kwargs):
+    def __call__(self, options, /, interest, dividends, include=False, **kwargs):
         assert isinstance(options, pd.DataFrame)
         x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
