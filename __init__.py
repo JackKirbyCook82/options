@@ -31,6 +31,7 @@ class OptionCalculator(Logging, Equations):
     quality = lambda activity, tightness: activity / (tightness ** 2 + 1e-6)
     activity = lambda supply, demand: np.minimum(supply, demand) / (np.maximum(supply, demand) + 10)
     tightness = lambda gap, median: gap / median
+    mean = lambda bid, ask, supply, demand: ((bid * demand) + (ask * supply)) / (demand + supply)
     median = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
