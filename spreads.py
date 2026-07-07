@@ -10,19 +10,16 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 from types import SimpleNamespace
-from abc import ABC, abstractmethod
 from functools import total_ordering
 from dataclasses import dataclass, fields
 
-from finance.variables import Enumerations, Specifications
-from finance.logging import Logging
+from finance.variables import Enumerations
 from finance.osi import OSI
 from support.custom import DateRange
-from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["SpreadCalculator", "SpreadMetrics"]
+__all__ = ["Spread", "Metrics"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -73,7 +70,7 @@ class Ratios:
     gap: Optional[float] = None
 
 @dataclass(frozen=True)
-class SpreadMetrics:
+class Metrics:
     ratios: Ratios; zscore: float; profit: float
 
     @classmethod
@@ -84,16 +81,14 @@ class SpreadMetrics:
         return cls(ratios, zscore, profit)
 
 
-class SpreadMeta(RegistryMeta): pass
-class Spread(ABC, metaclass=SpreadMeta):
-    def __init__(self, legs):
+class Spread(object):
+    def __init__(self, legs): self.legs = legs
+    def __new__(cls, legs):
         assert isinstance(legs, pd.DataFrame)
-        tickers = list(legs["ticker"].unique())
-        types = list(legs["spread"].unique())
-        assert len(tickers) == 1 and len(types) == 1
-        self.__ticker = str(tickers[0])
-        self.__type = types[0]
-        self.__legs = legs
+        assert len(legs["ticker"].unique()) == 1
+        assert len(legs["type"].unique()) == 1
+        instance = super().__new__(cls)
+        return instance
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self.records)
@@ -141,6 +136,16 @@ class Spread(ABC, metaclass=SpreadMeta):
         return Ratios(gamma=gamma, theta=theta, vega=vega, gap=gap)
 
     @property
+    def zscore(self):
+        if self.type is Enumerations.Spread.FLY:
+            left, center, right = self.legs["zscore"].to_numpy()
+            return center - (left + right) / 2
+        elif self.type is Enumerations.Spread.CALENDAR:
+            near, far = self.legs["zscore"].to_numpy()
+            return far - near
+        else: raise ValueError(self.type)
+
+    @property
     def tightness(self): return self.legs["tightness"].max()
     @property
     def moneyness(self): return self.legs["moneyness"].max()
@@ -148,160 +153,16 @@ class Spread(ABC, metaclass=SpreadMeta):
     def activity(self): return self.legs["activity"].min()
 
     @property
-    def expires(self):
-        expires = self.legs["expire"].to_list()
-        return DateRange.create(expires)
-
-    @property
     def position(self): return self.legs["position"]
     @property
     def quantity(self): return self.legs["quantity"]
 
     @property
-    @abstractmethod
-    def zscore(self): pass
-
+    def ticker(self): return str(list(self.legs["ticker"].unique()[0]))
     @property
-    def ticker(self): return self.__ticker
+    def expires(self): return DateRange.create(self.legs["expire"].to_list())
     @property
-    def legs(self): return self.__legs
-    @property
-    def type(self): return self.__type
-
-
-class FlySpread(Spread, register=Enumerations.Spread.FLY):
-    @property
-    def zscore(self):
-        left, center, right = self.legs["zscore"].to_numpy()
-        return center - (left + right) / 2
-
-
-class CalenderSpread(Spread, register=Enumerations.Spread.CALENDAR):
-    @property
-    def zscore(self):
-        near, far = self.legs["zscore"].to_numpy()
-        return far - near
-
-
-class SpreadCreator(ABC, metaclass=RegistryMeta):
-    def __init__(self, limit=1): self.limit = limit
-    def __call__(self, options):
-        assert isinstance(options, pd.DataFrame)
-        securities = self.securities(options)
-        organized = self.organizer(securities)
-        for security, dataframe in organized:
-            limit, length = int(self.limit), len(dataframe.index)
-            locators = self.locators(limit, length)
-            for locator in locators:
-                located = dataframe.iloc[locator].copy()
-                selector = self.selector(security, located)
-                for selected in selector:
-                    yield self.create(selected)
-
-    @staticmethod
-    def securities(options):
-        for position in iter(Enumerations.Position):
-            for option in iter(Enumerations.Option):
-                if option is Enumerations.Option.EMPTY: continue
-                if position is Enumerations.Position.EMPTY: continue
-                security = [Enumerations.Instrument.OPTION, option, position]
-                security = Specifications.Securities(tuple(security))
-                dataframe = options[options["option"].eq(option)]
-                yield security, dataframe
-
-    @staticmethod
-    @abstractmethod
-    def organizer(securities): pass
-    @staticmethod
-    @abstractmethod
-    def locators(limit, length): pass
-    @staticmethod
-    @abstractmethod
-    def selector(security, located): pass
-    @staticmethod
-    @abstractmethod
-    def create(selected): pass
-
-
-class FlyCreator(SpreadCreator, register=Enumerations.Spread.FLY):
-    @staticmethod
-    def organizer(securities):
-        for security, dataframes in securities:
-            for dte, dataframe in dataframes.groupby("dte"):
-                dataframe = dataframe.sort_values("strike")
-                yield security, dataframe
-
-    @staticmethod
-    def locators(limit, length):
-        for section in range(1, limit + 1):
-            for left in range(length - 2 * section):
-                center = left + section
-                right = left + section * 2
-                yield [left, center, right]
-
-    @staticmethod
-    def selector(security, located):
-        position = security.position
-        hedge = Enumerations.Position(-int(position))
-        located["spread"] = Enumerations.Spread.FLY
-        located["position"] = [hedge, position, hedge]
-        located["quantity"] = [1, 2, 1]
-        yield located
-
-    @staticmethod
-    def create(located): return Spread[Enumerations.Spread.FLY](located)
-
-
-class CalendarCreator(SpreadCreator, register=Enumerations.Spread.CALENDAR):
-    @staticmethod
-    def organizer(securities):
-        for security, dataframes in securities:
-            for strike, dataframe in dataframes.groupby("strike"):
-                dataframe = dataframe.sort_values("dte")
-                yield security, dataframe
-
-    @staticmethod
-    def locators(limit, length):
-        for section in range(1, limit + 1):
-            for near in range(length - section):
-                far = near + section
-                yield [near, far]
-
-    @staticmethod
-    def selector(security, located):
-        position = security.position
-        hedge = Enumerations.Position(-int(position))
-        located["spread"] = Enumerations.Spread.CALENDAR
-        located["position"] = [hedge, position]
-        located["quantity"] = [1, 1]
-        yield located
-
-    @staticmethod
-    def create(located): return Spread[Enumerations.Spread.CALENDAR](located)
-
-
-class SpreadCalculator(Logging):
-    def __init__(self, *args, spreads, limit=1, **kwargs):
-        assert isinstance(limit, int) and limit > 0
-        super().__init__(*args, **kwargs)
-        creators = {Enumerations.Spread(spread): SpreadCreator[spread](limit=limit) for spread in spreads}
-        self.__creators = creators
-
-    def __call__(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        generator = self.calculator(options, **kwargs)
-        spreads = list(generator)
-        self.results(spreads, title="Calculator", instrument=Enumerations.Instrument.SPREAD)
-        return spreads
-
-    def calculator(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        for creator in self.creators.values():
-            for spread in creator(options):
-                yield spread
-
-    @property
-    def creators(self): return self.__creators
+    def type(self): return list(self.legs["type"].unique())[0]
 
 
 

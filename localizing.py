@@ -91,10 +91,10 @@ class LocalizingVariables:
 
 
 class LocalizingCalculator(Logging):
-    def __init__(self, *args, variables, samples=35, overlap=0.80, **kwargs):
-        assert isinstance(variables, LocalizingVariables)
+    def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
+        assert isinstance(localizing, LocalizingVariables)
         super().__init__(*args, **kwargs)
-        self.__variables = variables
+        self.__localizing = localizing
         self.__overlap = float(overlap)
         self.__samples = int(samples)
 
@@ -107,9 +107,9 @@ class LocalizingCalculator(Logging):
 
     def calculator(self, options):
         centers, history = self.centers(options), list()
-        for tau in self.variables.taus(centers.taus):
+        for tau in self.localizing.taus(centers.taus):
             for center in centers.maes:
-                for mae in self.variables.maes(center):
+                for mae in self.localizing.maes(center):
                     localized = self.localized(options, tau, mae)
                     if self.adequate(localized) and not self.similar(localized, history):
                         index = set(localized.index)
@@ -123,14 +123,14 @@ class LocalizingCalculator(Logging):
         taus = np.sort(options["tau"].unique().astype(float))
         mae = options["mae"].to_numpy(dtype=float)
         low, high = np.nanmin(mae), np.nanmax(mae)
-        step = self.variables.maes.radii.inner / 2
+        step = self.localizing.maes.radii.inner / 2
         maes = np.arange(low, high + step, step, dtype=float)
         order = np.argsort(np.abs(maes))
         return SimpleNamespace(taus=taus, maes=maes[order])
 
     def adequate(self, localized):
-        tau = localized["tau"].nunique() >= self.variables.taus.coverage
-        mae = localized["mae"].nunique() >= self.variables.maes.coverage
+        tau = localized["tau"].nunique() >= self.localizing.taus.coverage
+        mae = localized["mae"].nunique() >= self.localizing.maes.coverage
         return (len(localized) >= self.samples) and tau and mae
 
     def similar(self, localized, history):
@@ -161,7 +161,7 @@ class LocalizingCalculator(Logging):
             except StopIteration: yield from left; return
 
     @property
-    def variables(self): return self.__variables
+    def localizing(self): return self.__localizing
     @property
     def samples(self): return self.__samples
     @property
