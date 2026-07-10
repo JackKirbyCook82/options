@@ -26,10 +26,10 @@ __license__ = "MIT License"
 @total_ordering
 @dataclass(frozen=True)
 class Profit:
-    valuation: float; market: float
+    value: float; cost: float
 
     def __lt__(self, other): return float(self) < float(other)
-    def __float__(self): return self.valuation - self.market
+    def __float__(self): return self.value - self.cost
 
 @total_ordering
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class Acquisition(Spread):
     @property
     def score(self): return Score(self.profit, self.quality, self.risk)
     @property
-    def profit(self): return Profit(self.valuation, self.market)
+    def profit(self): return Profit(self.value, self.cost)
     @property
     def quality(self): return Quality(self.zscore, self.gap, self.profit)
     @property

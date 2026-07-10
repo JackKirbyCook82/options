@@ -39,8 +39,6 @@ class Spread(object):
 
     @property
     def osi(self): return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
-    @property
-    def cost(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
 
     @property
     def gamma(self): return (self.securities["gamma"] * self.position.map(int) * self.quantity).sum()
@@ -50,9 +48,9 @@ class Spread(object):
     def vega(self): return (self.securities["vega"] * self.position.map(int) * self.quantity).sum()
 
     @property
-    def valuation(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
+    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
     @property
-    def market(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
+    def cost(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
     @property
     def gap(self): return (self.securities["gap"] * self.quantity).sum()
 
