@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from functools import total_ordering
 from dataclasses import dataclass, fields
 
-from finance.variables import Enumerations
+from finance.enumerations import Spread
 from finance.osi import OSI
 from support.custom import DateRange
 
@@ -137,10 +137,10 @@ class Spread(object):
 
     @property
     def zscore(self):
-        if self.type is Enumerations.Spread.FLY:
+        if self.type is Spread.FLY:
             left, center, right = self.legs["zscore"].to_numpy()
             return center - (left + right) / 2
-        elif self.type is Enumerations.Spread.CALENDAR:
+        elif self.type is Spread.CALENDAR:
             near, far = self.legs["zscore"].to_numpy()
             return far - near
         else: raise ValueError(self.type)

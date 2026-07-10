@@ -12,7 +12,7 @@ from itertools import product
 from datetime import date as Date
 from dataclasses import dataclass
 
-from finance.variables import Enumerations
+from finance.enumerations import Instrument
 from finance.logging import Logging
 from support.equations import Equations
 from support.custom import NumRange
@@ -39,7 +39,7 @@ class OptionCalculator(Logging, Equations):
         assert isinstance(options, pd.DataFrame)
         calculated = self.execute(options, **kwargs)
         options = pd.concat([options, calculated], axis=1)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 
 
@@ -54,7 +54,7 @@ class SurvivalCalculator(Logging):
     def __call__(self, options, **kwargs):
         assert isinstance(options, pd.DataFrame)
         survivals = self.generate(options, **kwargs)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return survivals
 
     def generate(self, options, **kwargs):
@@ -95,7 +95,7 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         sanity = self.execute(options, **kwargs).squeeze()
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         options = self.filter(options, sanity)
         return options
 
@@ -104,7 +104,7 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
         options = options.where(sanity["sanity"]).dropna(how="all", inplace=False)
         post = len(options.index)
         sizes = dict(previous=previous, post=post)
-        self.results(options, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
+        self.results(options, title="Filtered", instrument=Instrument.OPTION, **sizes)
         return options
 
 
@@ -129,7 +129,7 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
         assert isinstance(options, pd.DataFrame)
         if bool(options.empty): return options
         viability = self.execute(options, **kwargs)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         options = self.filter(options, viability)
         self.breakdown(viability)
         return options
@@ -139,7 +139,7 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
         options = options.where(viability["viability"]).dropna(how="all", inplace=False)
         post = len(options.index)
         sizes = dict(previous=previous, post=post)
-        self.results(options, title="Filtered", instrument=Enumerations.Instrument.OPTION, **sizes)
+        self.results(options, title="Filtered", instrument=Instrument.OPTION, **sizes)
         return options
 
     def breakdown(self, viabilities):

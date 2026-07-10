@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.variables import Enumerations
+from finance.enumerations import Instrument
 from finance.logging import Logging
 
 __version__ = "1.0.0"
@@ -76,7 +76,7 @@ class ValuationCalculator(Logging):
         valuations = calculation(x, k, τ, σ, i, float(interest), float(dividends))
         valuations = pd.Series(valuations, name="value", index=options.index)
         options = pd.concat([options, valuations], axis=1)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 
 

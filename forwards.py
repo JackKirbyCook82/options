@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from itertools import product
 
-from finance.variables import Enumerations
+from finance.enumerations import Instrument, Option
 from finance.logging import Logging
 
 __version__ = "1.0.0"
@@ -35,7 +35,7 @@ class ForwardCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         options = self.generate(options, **kwargs)
         options = options.sort_index(inplace=False)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 
     def generate(self, options, /, **kwargs):
@@ -98,14 +98,14 @@ class ForwardCalculator(Logging):
     @staticmethod
     def samples(options, /, **kwargs):
         samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "gap", "supply", "demand"], sort=False).sort_index()
-        if set(Enumerations.Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
-        validity = [samples[index].notna() for index in list(product(["median", "gap"], list(Enumerations.Option)))]
+        if set(Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
+        validity = [samples[index].notna() for index in list(product(["median", "gap"], list(Option)))]
         samples = samples[np.logical_and.reduce(validity)]
-        difference = (samples["median", Enumerations.Option.CALL] - samples["median", Enumerations.Option.PUT]).rename("difference")
-        supply = (samples["supply", Enumerations.Option.CALL] + samples["supply", Enumerations.Option.PUT]).rename("supply")
-        demand = (samples["demand", Enumerations.Option.CALL] + samples["demand", Enumerations.Option.PUT]).rename("demand")
-        median = (samples["median", Enumerations.Option.CALL] + samples["median", Enumerations.Option.PUT]).rename("median")
-        gap = (samples["gap", Enumerations.Option.CALL] + samples["gap", Enumerations.Option.PUT]).rename("gap")
+        difference = (samples["median", Option.CALL] - samples["median", Option.PUT]).rename("difference")
+        supply = (samples["supply", Option.CALL] + samples["supply", Option.PUT]).rename("supply")
+        demand = (samples["demand", Option.CALL] + samples["demand", Option.PUT]).rename("demand")
+        median = (samples["median", Option.CALL] + samples["median", Option.PUT]).rename("median")
+        gap = (samples["gap", Option.CALL] + samples["gap", Option.PUT]).rename("gap")
         strike = samples.index.get_level_values("strike").to_series(index=samples.index)
         samples = pd.concat([strike, difference, median, gap, supply, demand], axis=1)
         samples = samples.reset_index(drop=True, inplace=False)

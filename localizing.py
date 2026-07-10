@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from finance.variables import Enumerations
+from finance.enumerations import Instrument
 from finance.logging import Logging
 from support.custom import NumRange
 
@@ -102,7 +102,7 @@ class LocalizingCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         options = options[options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()].copy()
         for local in self.calculator(options):
-            self.results(local, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+            self.results(local, title="Calculated", instrument=Instrument.OPTION)
             yield local
 
     def calculator(self, options):

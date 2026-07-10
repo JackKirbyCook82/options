@@ -11,7 +11,7 @@ import pandas as pd
 from abc import ABC
 from scipy.spatial import cKDTree
 
-from finance.variables import Enumerations
+from finance.enumerations import Instrument
 from finance.logging import Logging
 from support.equations import Equations
 
@@ -106,7 +106,7 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
         options = pd.concat([options, variance], axis=1)
         options = self.clean(options)
         options = self.screen(options)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 
 
@@ -119,7 +119,7 @@ class StandardizingCalculator(NeighborhoodCalculator):
         standard = self.standard(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="zscore", index=options.index)
         options = pd.concat([options, standard], axis=1)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 
     def standard(self, t, k, w, f):

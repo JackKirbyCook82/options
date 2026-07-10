@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.variables import Enumerations
+from finance.enumerations import Instrument
 from finance.logging import Logging
 
 __version__ = "1.0.0"
@@ -151,7 +151,7 @@ class GreekCalculator(Logging):
         greeks = dict(zip(["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"], greeks))
         greeks = pd.DataFrame(greeks, index=options.index)
         options = pd.concat([options, greeks], axis=1)
-        self.results(options, title="Calculated", instrument=Enumerations.Instrument.OPTION)
+        self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 
 
