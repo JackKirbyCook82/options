@@ -24,7 +24,7 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class OptionCalculator(Logging, Equations):
+class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", "activity", "median", "gap", "dte", "tau"]):
     moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
