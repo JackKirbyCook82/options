@@ -6,8 +6,6 @@ Created on Mon Jul 6 2026
 
 """
 
-import pandas as pd
-
 from finance.logging import Logging
 from options.spreads import Spread
 
@@ -22,9 +20,12 @@ class Divestiture(Spread):
     pass
 
 
+class DivestitureCreator(object):
+    pass
+
+
 class DivestitureCalculator(Logging):
-    def __call__(self, options, **kwargs):
-        assert isinstance(options, pd.DataFrame)
+    pass
 
 
 

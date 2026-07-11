@@ -11,6 +11,7 @@ import pandas as pd
 from numpy.typing import NDArray
 from dataclasses import dataclass
 from types import SimpleNamespace
+from abc import ABC, abstractmethod
 
 from finance.enumerations import Instrument
 from finance.logging import Logging
@@ -18,7 +19,7 @@ from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["LocalizingCalculator", "LocalizingVariables"]
+__all__ = ["LocalizingVariables"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -37,18 +38,6 @@ class Tau: population: NDArray[np.floating]; center: float; span: int
 class Taus:
     windows: Windows; coverage: int = 3; limit: float = 45 / 365
 
-    def __call__(self, centers):
-        for index, center in enumerate(centers):
-            for window in self.windows:
-                low = max(0, index - window)
-                high = min(len(centers), index + window + 1)
-                population = centers[low:high]
-                if len(population) == 0: continue
-                size = float(np.max(population) - np.min(population))
-                if size > self.limit: continue
-                yield Tau(population=population, center=center, span=window)
-
-
 @dataclass(frozen=True)
 class Radii:
     inner: float = 0.05; outer: float = 0.12; step: float = 0.01
@@ -65,11 +54,6 @@ class Mae: population: NumRange; center: float; span: float
 @dataclass(frozen=True)
 class Maes:
     radii: Radii; coverage: int = 10
-
-    def __call__(self, center):
-        for radius in self.radii:
-            population = NumRange.create([center - radius, center + radius])
-            yield Mae(population=population, center=center, span=radius)
 
 
 @dataclass(frozen=True)
@@ -90,7 +74,7 @@ class LocalizingVariables:
         return cls(taus=taus, maes=maes)
 
 
-class LocalizingCalculator(Logging):
+class LocalizingCalculator(Logging, ABC):
     def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
         assert isinstance(localizing, LocalizingVariables)
         super().__init__(*args, **kwargs)
@@ -99,17 +83,31 @@ class LocalizingCalculator(Logging):
         self.__samples = int(samples)
 
     def __call__(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        options = options[options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()].copy()
+        assert isinstance(options, pd.DataFrame) and not options.empty
+        options = self.cleaner(options)
         for local in self.calculator(options):
             self.results(local, title="Calculated", instrument=Instrument.OPTION)
             yield local
 
+    def adequate(self, localized):
+        tau = localized["tau"].nunique() >= self.localizing.taus.coverage
+        mae = localized["mae"].nunique() >= self.localizing.maes.coverage
+        return (len(localized) >= self.samples) and tau and mae
+
+    def similar(self, localized, history):
+        current = set(localized.index)
+        for prior in history:
+            union = len(current | prior)
+            if union == 0: continue
+            overlap = len(current & prior) / union
+            if overlap >= self.overlap: return True
+        return False
+
     def calculator(self, options):
         centers, history = self.centers(options), list()
-        for tau in self.localizing.taus(centers.taus):
+        for tau in self.taus(centers.taus):
             for center in centers.maes:
-                for mae in self.localizing.maes(center):
+                for mae in self.maes(center):
                     localized = self.localized(options, tau, mae)
                     if self.adequate(localized) and not self.similar(localized, history):
                         index = set(localized.index)
@@ -128,19 +126,27 @@ class LocalizingCalculator(Logging):
         order = np.argsort(np.abs(maes))
         return SimpleNamespace(taus=taus, maes=maes[order])
 
-    def adequate(self, localized):
-        tau = localized["tau"].nunique() >= self.localizing.taus.coverage
-        mae = localized["mae"].nunique() >= self.localizing.maes.coverage
-        return (len(localized) >= self.samples) and tau and mae
+    def taus(self, centers):
+        for index, center in enumerate(centers):
+            for window in self.localizing.taus.windows:
+                low = max(0, index - window)
+                high = min(len(centers), index + window + 1)
+                population = centers[low:high]
+                if len(population) == 0: continue
+                size = float(np.max(population) - np.min(population))
+                if size > self.localizing.taus.limit: continue
+                yield Tau(population=population, center=center, span=window)
 
-    def similar(self, localized, history):
-        current = set(localized.index)
-        for prior in history:
-            union = len(current | prior)
-            if union == 0: continue
-            overlap = len(current & prior) / union
-            if overlap >= self.overlap: return True
-        return False
+    def maes(self, center):
+        for radius in self.localizing.maes.radii:
+            population = NumRange.create([center - radius, center + radius])
+            yield Mae(population=population, center=center, span=radius)
+
+    @staticmethod
+    def cleaner(options):
+        mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
+        options = options[mask].copy()
+        return options
 
     @staticmethod
     def localized(options, tau, mae):
@@ -166,6 +172,7 @@ class LocalizingCalculator(Logging):
     def samples(self): return self.__samples
     @property
     def overlap(self): return self.__overlap
+
 
 
 
