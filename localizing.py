@@ -11,6 +11,7 @@ import pandas as pd
 from numpy.typing import NDArray
 from dataclasses import dataclass
 from types import SimpleNamespace
+from abc import ABC, abstractmethod
 
 from finance.enumerations import Instrument
 from finance.logging import Logging
@@ -18,7 +19,7 @@ from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["LocalizingCalculator"]
+__all__ = ["PartitioningCalculator", "ProximityCalculator", "Localizing"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -52,13 +53,6 @@ class Local: tau: Tau; mae: Mae
 
 
 @dataclass(frozen=True)
-class Centers: tau: NDArray[np.floating]; mae: NDArray[np.floating]
-
-@dataclass(frozen=True)
-class Center: tau: float; mae: float
-
-
-@dataclass(frozen=True)
 class Taus:
     windows: Windows; coverage: int = 3; limit: float = 45 / 365
 
@@ -83,24 +77,33 @@ class Localizing:
         return cls(taus=taus, maes=maes)
 
 
-class LocalizingGenerator(object):
-    def __init__(self, options, localizing):
-        centers = self.create(options, localizing)
+class LocalizingError(Exception): pass
+class PartitionedLocalizingError(Exception): pass
+class ProximityLocalizingError(LocalizingError): pass
+
+
+class LocalizingCalculator(Logging, ABC):
+    def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
+        assert isinstance(localizing, Localizing)
+        super().__init__(*args, **kwargs)
         self.__localizing = localizing
-        self.__centers = centers
+        self.__overlap = float(overlap)
+        self.__samples = int(samples)
 
-    def __iter__(self):
-        for index, tauCenter in enumerate(self.centers.tau):
-            for tau in self.taus(index, tauCenter):
-                for maeCenter in self.centers.mae:
-                    for mae in self.maes(maeCenter):
-                        yield Local(tau=tau, mae=mae)
+    def centers(self, options):
+        taus = np.sort(options["tau"].unique().astype(float))
+        mae = options["mae"].to_numpy(dtype=float)
+        low, high = np.nanmin(mae), np.nanmax(mae)
+        step = self.localizing.maes.radii.inner / 2
+        maes = np.arange(low, high + step, step, dtype=float)
+        order = np.argsort(np.abs(maes))
+        return SimpleNamespace(tau=taus, mae=maes[order])
 
-    def taus(self, index, center):
+    def taus(self, center, centers, /, index):
         for window in self.localizing.taus.windows:
             low = max(0, index - window)
-            high = min(len(self.centers.tau), index + window + 1)
-            population = self.centers.tau[low:high]
+            high = min(len(centers), index + window + 1)
+            population = centers[low:high]
             if len(population) == 0: continue
             size = float(np.max(population) - np.min(population))
             if size > self.localizing.taus.limit: continue
@@ -110,94 +113,6 @@ class LocalizingGenerator(object):
         for radius in self.localizing.maes.radii:
             population = NumRange.create([center - radius, center + radius])
             yield Mae(population=population, center=center, span=radius)
-
-    @staticmethod
-    def create(options, localizing):
-        taus = np.sort(options["tau"].unique().astype(float))
-        mae = options["mae"].to_numpy(dtype=float)
-        low, high = np.nanmin(mae), np.nanmax(mae)
-        step = localizing.maes.radii.inner / 2
-        maes = np.arange(low, high + step, step, dtype=float)
-        order = np.argsort(np.abs(maes))
-        return Centers(tau=taus, mae=maes[order])
-
-    @property
-    def localizing(self): return self.__localizing
-    @property
-    def centers(self): return self.__centers
-
-
-class ProximityCalculator(Logging):
-    def __call__(self, options, spread, **kwargs):
-        assert isinstance(options, pd.DataFrame) and not options.empty
-        assert isinstance(spread, pd.DataFrame) and not spread.empty
-        options = self.cleaner(options)
-        proximity = self.calculate(options, spread, **kwargs)
-        self.results(Proximity, title="Calculated", instrument=Instrument=OPTION)
-        return proximity
-
-    def calculate(self, options, spread, **kwargs):
-        pass
-
-    @staticmethod
-    def center(spread):
-        tau = float(spread["tau"].mean())
-        mae = float(spread["mae"].mean())
-        return Center(tau=tau, mae=mae)
-
-
-class LocalizingCalculator(Logging):
-    def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
-        assert isinstance(localizing, Localizing)
-        super().__init__(*args, **kwargs)
-        self.__localizing = localizing
-        self.__overlap = float(overlap)
-        self.__samples = int(samples)
-
-    def __call__(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame) and not options.empty
-        options = self.cleaner(options)
-        for local in self.calculator(options, **kwargs):
-            self.results(local, title="Calculated", instrument=Instrument.OPTION)
-            yield local
-
-    def calculator(self, options, **kwargs):
-        generator = LocalizingGenerator(options, self.localizing)
-        history = list()
-        for local in generator:
-            localized = self.localizer(options, local)
-            if self.adequate(localized) and not self.similar(localized, history):
-                index = set(localized.index)
-                history.append(index)
-                localized.attrs["tau"] = localized.tau
-                localized.attrs["mae"] = localized.mae
-                yield localized
-                break
-
-    def taus(self, centers):
-        for index, center in enumerate(centers):
-            for window in self.localizing.taus.windows:
-                low = max(0, index - window)
-                high = min(len(centers), index + window + 1)
-                population = centers[low:high]
-                if len(population) == 0: continue
-                size = float(np.max(population) - np.min(population))
-                if size > self.localizing.taus.limit: continue
-                yield Tau(population=population, center=center, span=window)
-
-    def maes(self, center):
-        for radius in self.localizing.maes.radii:
-            population = NumRange.create([center - radius, center + radius])
-            yield Mae(population=population, center=center, span=radius)
-
-    def centers(self, options):
-        taus = np.sort(options["tau"].unique().astype(float))
-        mae = options["mae"].to_numpy(dtype=float)
-        low, high = np.nanmin(mae), np.nanmax(mae)
-        step = self.localizing.maes.radii.inner / 2
-        maes = np.arange(low, high + step, step, dtype=float)
-        order = np.argsort(np.abs(maes))
-        return SimpleNamespace(taus=taus, maes=maes[order])
 
     def adequate(self, localized):
         tau = localized["tau"].nunique() >= self.localizing.taus.coverage
@@ -213,17 +128,35 @@ class LocalizingCalculator(Logging):
             if overlap >= self.overlap: return True
         return False
 
-    @staticmethod
-    def cleaner(options):
-        mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
-        options = options[mask].copy()
-        return options
+    @abstractmethod
+    def calculator(self, *args, **kwargs): pass
+    @abstractmethod
+    def generator(self, *args, **kwargs): pass
 
     @staticmethod
-    def localizer(options, local):
+    def contained(localized, spread, key="osi"):
+        assert key == "osi"
+        if key in localized.columns and key in spread.columns:
+            available = set(localized[key].dropna())
+            required = set(spread[key].dropna())
+            return required.issubset(available)
+        return True
+
+    @staticmethod
+    def localize(options, local):
+        assert isinstance(local, Local)
         tau = options["tau"].isin(local.tau.population)
         mae = options["mae"].between(local.mae.population.minimum, local.mae.population.maximum)
-        return options[tau & mae]
+        localized = options[tau & mae].copy()
+        localized.attrs["tau"] = local.tau
+        localized.attrs["mae"] = local.mae
+        return localized
+
+    @staticmethod
+    def cleaner(dataframe):
+        mask = dataframe["tau"].notna() & dataframe["mae"].notna()
+        if "tiv" in dataframe.columns: mask &= dataframe["tiv"].notna()
+        return dataframe[mask].copy()
 
     @staticmethod
     def alternate(array):
@@ -245,8 +178,60 @@ class LocalizingCalculator(Logging):
     def overlap(self): return self.__overlap
 
 
+class ProximityCalculator(LocalizingCalculator):
+    def __call__(self, options, spread, **kwargs):
+        assert isinstance(options, pd.DataFrame) and not options.empty
+        assert isinstance(spread, pd.DataFrame) and not spread.empty
+        options = self.cleaner(options)
+        spread = self.cleaner(spread)
+        proximity = self.calculator(options, spread, **kwargs)
+        self.results(proximity, title="Calculated", instrument=Instrument.OPTION)
+        return proximity
+
+    def calculator(self, options, spread, **kwargs):
+        for local in self.generator(options, spread, **kwargs):
+            localized = self.localize(options, local)
+            if not self.adequate(localized): continue
+            if not self.contained(localized, spread): continue
+            return localized
+        raise ProximityLocalizingError()
+
+    def generator(self, options, spread, **kwargs):
+        centers = self.centers(options)
+        tauCenter = float(spread["tau"].mean())
+        maeCenter = float(spread["mae"].mean())
+        distances = np.abs(centers.tau.astype(float) - float(tauCenter))
+        index = int(np.argmin(distances))
+        for tau in self.taus(tauCenter, centers.tau, index=index):
+            for mae in self.maes(maeCenter):
+                yield Local(tau=tau, mae=mae)
 
 
+class PartitioningCalculator(LocalizingCalculator):
+    def __call__(self, options, /, **kwargs):
+        assert isinstance(options, pd.DataFrame) and not options.empty
+        options = self.cleaner(options)
+        for local in self.calculator(options, **kwargs):
+            self.results(local, title="Calculated", instrument=Instrument.OPTION)
+            yield local
+
+    def calculator(self, options, **kwargs):
+        history = list()
+        for local in self.generator(options, **kwargs):
+            localized = self.localize(options, local)
+            if not self.adequate(localized): continue
+            if self.similar(localized, history): continue
+            index = set(localized.index)
+            history.append(index)
+            yield localized
+
+    def generator(self, options, **kwargs):
+        centers = self.centers(options)
+        for index, tauCenter in enumerate(centers.tau):
+            for tau in self.taus(tauCenter, centers.tau, index=index):
+                for maeCenter in centers.mae:
+                    for mae in self.maes(maeCenter):
+                        yield Local(tau=tau, mae=mae)
 
 
 
