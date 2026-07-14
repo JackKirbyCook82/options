@@ -17,7 +17,7 @@ from support.equations import Equations
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["VarianceCalculator", "StandardizingCalculator"]
+__all__ = ["VarianceCalculator", "StandardizationCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -110,7 +110,7 @@ class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
         return options
 
 
-class StandardizingCalculator(NeighborhoodCalculator):
+class StandardizationCalculator(NeighborhoodCalculator):
     def __call__(self, options, surface, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         tau = options["tau"].to_numpy(dtype=float)

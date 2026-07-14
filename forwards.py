@@ -26,10 +26,10 @@ class ForwardSampleError(ForwardError): pass
 
 
 class ForwardCalculator(Logging):
-    def __init__(self, *args, tight=0.05, samplesize=5, **kwargs):
+    def __init__(self, *args, tightness=0.15, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
-        self.__tightness = float(tight)
+        self.__tightness = float(tightness)
 
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)

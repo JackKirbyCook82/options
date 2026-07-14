@@ -19,7 +19,7 @@ from support.custom import NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["PartitioningCalculator", "ProximityCalculator", "Localizing"]
+__all__ = ["PartitionCalculator", "ProximityCalculator", "Localizing"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -207,7 +207,7 @@ class ProximityCalculator(LocalizingCalculator):
                 yield Local(tau=tau, mae=mae)
 
 
-class PartitioningCalculator(LocalizingCalculator):
+class PartitionCalculator(LocalizingCalculator):
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame) and not options.empty
         options = self.cleaner(options)
