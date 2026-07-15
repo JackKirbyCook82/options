@@ -35,6 +35,16 @@ class Spread(object):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
 
     @property
+    def zscore(self):
+        if self.strategy is Strategy.FLY:
+            left, center, right = self.securities["zscore"].to_numpy()
+            return center - (left + right) / 2
+        elif self.strategy is Strategy.CALENDAR:
+            near, far = self.securities["zscore"].to_numpy()
+            return far - near
+        else: raise ValueError(self.strategy)
+
+    @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
     @property
     def osi(self): return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)

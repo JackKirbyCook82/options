@@ -179,27 +179,27 @@ class LocalizingCalculator(Logging, ABC):
 
 
 class ProximityCalculator(LocalizingCalculator):
-    def __call__(self, options, spread, **kwargs):
+    def __call__(self, options, spreads, **kwargs):
         assert isinstance(options, pd.DataFrame) and not options.empty
-        assert isinstance(spread, pd.DataFrame) and not spread.empty
+        assert isinstance(spreads, pd.DataFrame) and not spreads.empty
         options = self.cleaner(options)
-        spread = self.cleaner(spread)
-        proximity = self.calculator(options, spread, **kwargs)
+        spreads = self.cleaner(spreads)
+        proximity = self.calculator(options, spreads, **kwargs)
         self.results(proximity, title="Calculated", instrument=Instrument.OPTION)
         return proximity
 
-    def calculator(self, options, spread, **kwargs):
-        for local in self.generator(options, spread, **kwargs):
+    def calculator(self, options, spreads, **kwargs):
+        for local in self.generator(options, spreads, **kwargs):
             localized = self.localize(options, local)
             if not self.adequate(localized): continue
-            if not self.contained(localized, spread): continue
+            if not self.contained(localized, spreads): continue
             return localized
         raise ProximityLocalizingError()
 
-    def generator(self, options, spread, **kwargs):
+    def generator(self, options, spreads, **kwargs):
         centers = self.centers(options)
-        tauCenter = float(spread["tau"].mean())
-        maeCenter = float(spread["mae"].mean())
+        tauCenter = float(spreads["tau"].mean())
+        maeCenter = float(spreads["mae"].mean())
         distances = np.abs(centers.tau.astype(float) - float(tauCenter))
         index = int(np.argmin(distances))
         for tau in self.taus(tauCenter, centers.tau, index=index):
