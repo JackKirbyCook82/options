@@ -17,7 +17,8 @@ __license__ = "MIT License"
 
 
 class Acquisition(Spread):
-    pass
+    @property
+    def edge(self): return self.value - self.cost
 
 
 class AcquisitionCreator(object):
