@@ -17,11 +17,18 @@ __license__ = "MIT License"
 
 class Divestiture(Spread):
     @property
-    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
+    def spent(self): return self.securities["spent"].sum()
     @property
-    def market(self):
-        asks = (self.securities["ask"] * ((self.position.map(int) - 1) / 2) * self.quantity).sum()  # SHORT POSITION (-)
-        bids = (self.securities["bid"] * ((self.position.map(int) + 1) / 2) * self.quantity).sum()  # LONG POSITION (+)
-        return bids - asks
+    def liquidate(self):
+        selling = (self.securities["bid"] * ((self.position.map(int) + 1) / 2) * self.quantity).sum()
+        buying = (self.securities["ask"] * ((self.position.map(int) - 1) / 2) * self.quantity).sum()
+        return selling - buying
+
+    @property
+    def gain(self): return max(self.market - self.spent, 0)
+    @property
+    def loss(self): return max(self.spent - self.market, 0)
+    @property
+    def profit(self): return self.liquidate - self.spent
 
 

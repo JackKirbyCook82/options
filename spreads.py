@@ -30,30 +30,30 @@ class Greeks: delta: float; gamma: float; theta: float; vega: float; theta: floa
 @dataclass(frozen=True)
 class Risk:
     greeks: Greeks; edge: float; underlying: float; volatility: float
-    days: Optional[float] = 1; vols: Optional[float] = 1
 
-    @property
-    def delta(self):
+    def __call__(self, movement, /, days: int = 1, vols: int = 1):
+        delta = self.delta(movement)
+        gamma = self.gamma()
+        theta = self.theta(days)
+        vega = self.vega(vols)
+        return delta + gamma + theta + vega
+
+    def delta(self, movement):
         underlying = self.underlying * self.volatility / math.sqrt(252)
         delta = self.greeks.delta * underlying
-        return delta / max(abs(self.edge), 1e-12)
+        return int(movement) * delta / max(abs(self.edge), 1e-12)
 
-    @property
     def gamma(self):
         underlying = self.underlying * self.volatility / math.sqrt(252)
         gamma = 0.5 * self.greeks.gamma * underlying ** 2
         return gamma / max(abs(self.edge), 1e-12)
 
-    @property
-    def theta(self):
-        days = (self.days / 252)
-        theta = self.greeks.theta * days
+    def theta(self, days):
+        theta = self.greeks.theta * (days / 252)
         return theta / max(abs(self.edge), 1e-12)
 
-    @property
-    def vega(self):
-        vols = self.vols / 100
-        vega = self.greeks.vega * vols
+    def vega(self, vols):
+        vega = self.greeks.vega * (vols / 100)
         return vega / max(abs(self.edge), 1e-12)
 
 
@@ -79,7 +79,7 @@ class Spread(ABC):
         underlying = self.securities["underlying"].values[0]
         volatility = self.securities["implied"].mean()
         greeks = Greeks(**self.greeks)
-        return Risk(underlying=underlying, volatility=volatility, greeks=greeks, edge=self.edge)
+        return Risk(greeks, self.edge, underlying, volatility)
 
     @property
     def zscore(self):
@@ -97,6 +97,13 @@ class Spread(ABC):
     def osi(self): return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
 
     @property
+    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
+    @property
+    def market(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
+    @property
+    def edge(self): return self.value - self.market
+
+    @property
     def gamma(self): return (self.securities["gamma"] * self.position.map(int) * self.quantity).sum()
     @property
     def theta(self): return (self.securities["theta"] * self.position.map(int) * self.quantity).sum()
@@ -107,7 +114,6 @@ class Spread(ABC):
 
     @property
     def gap(self): return (self.securities["gap"] * self.quantity).sum()
-
     @property
     def tightness(self): return self.securities["tightness"].max()
     @property
@@ -129,12 +135,6 @@ class Spread(ABC):
     @property
     def ticker(self): return self.__ticker
 
-    @property
-    @abstractmethod
-    def value(self): pass
-    @property
-    @abstractmethod
-    def market(self): pass
 
 
 

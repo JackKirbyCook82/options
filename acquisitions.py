@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tues May 12 2026
+Created on Mon Jul 6 2026
 @name:   Option Acquisition Objects
 @author: Jack Kirby Cook
 
@@ -16,9 +16,6 @@ __license__ = "MIT License"
 
 
 class Acquisition(Spread):
-    @property
-    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
-    @property
-    def market(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
+    pass
 
 
