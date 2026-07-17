@@ -6,8 +6,12 @@ Created on Sat May 16 2026
 
 """
 
+import math
 import pandas as pd
+from typing import Optional
+from dataclasses import dataclass
 from types import SimpleNamespace
+from abc import ABC, abstractmethod
 
 from finance.enumerations import Strategy
 from finance.osi import OSI
@@ -20,19 +24,62 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class Spread(object):
+@dataclass(frozen=True)
+class Greeks: delta: float; gamma: float; theta: float; vega: float; theta: float
+
+@dataclass(frozen=True)
+class Risk:
+    greeks: Greeks; edge: float; underlying: float; volatility: float
+    days: Optional[float] = 1; vols: Optional[float] = 1
+
+    @property
+    def delta(self):
+        underlying = self.underlying * self.volatility / math.sqrt(252)
+        delta = self.greeks.delta * underlying
+        return delta / max(abs(self.edge), 1e-12)
+
+    @property
+    def gamma(self):
+        underlying = self.underlying * self.volatility / math.sqrt(252)
+        gamma = 0.5 * self.greeks.gamma * underlying ** 2
+        return gamma / max(abs(self.edge), 1e-12)
+
+    @property
+    def theta(self):
+        days = (self.days / 252)
+        theta = self.greeks.theta * days
+        return theta / max(abs(self.edge), 1e-12)
+
+    @property
+    def vega(self):
+        vols = self.vols / 100
+        vega = self.greeks.vega * vols
+        return vega / max(abs(self.edge), 1e-12)
+
+
+class Spread(ABC):
     def __init__(self, strategy, securities):
         assert isinstance(securities, pd.DataFrame)
         assert len(securities["ticker"].unique()) == 1
+        assert len(securities["underlying"].unique()) == 1
+        assert len(securities["volatility"].unique()) == 1
         assert strategy in list(Strategy)
-        self.__expires = DateRange.create(securities["expire"].to_list())
         self.__ticker = securities["ticker"].unique()[0]
+        self.__expires = DateRange.create(securities["expire"].to_list())
         self.__securities = securities
         self.__strategy = strategy
 
     def __iter__(self):
         for osi, position, quantity in zip(self.osi, self.position, self.quantity):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
+
+    @property
+    def risk(self):
+        assert len(self.securities["underlying"].unique()) == 1
+        underlying = self.securities["underlying"].values[0]
+        volatility = self.securities["implied"].mean()
+        greeks = Greeks(**self.greeks)
+        return Risk(underlying=underlying, volatility=volatility, greeks=greeks, edge=self.edge)
 
     @property
     def zscore(self):
@@ -55,11 +102,9 @@ class Spread(object):
     def theta(self): return (self.securities["theta"] * self.position.map(int) * self.quantity).sum()
     @property
     def vega(self): return (self.securities["vega"] * self.position.map(int) * self.quantity).sum()
+    @property
+    def greeks(self): return dict(gamma=self.gamma, theta=self.theta, vega=self.vega)
 
-    @property
-    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
-    @property
-    def cost(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
     @property
     def gap(self): return (self.securities["gap"] * self.quantity).sum()
 
@@ -76,15 +121,20 @@ class Spread(object):
     def quantity(self): return self.securities["quantity"]
 
     @property
-    def securities(self): return self.securities
+    def securities(self): return self.__securities
     @property
-    def strategy(self): return self.strategy
+    def strategy(self): return self.__strategy
     @property
     def expires(self): return self.__expires
     @property
     def ticker(self): return self.__ticker
 
-
+    @property
+    @abstractmethod
+    def value(self): pass
+    @property
+    @abstractmethod
+    def market(self): pass
 
 
 
