@@ -8,10 +8,9 @@ Created on Sat May 16 2026
 
 import math
 import pandas as pd
-from typing import Optional
+from abc import ABC
 from dataclasses import dataclass
 from types import SimpleNamespace
-from abc import ABC, abstractmethod
 
 from finance.enumerations import Strategy
 from finance.osi import OSI
@@ -96,12 +95,16 @@ class Spread(ABC):
     @property
     def osi(self): return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
 
-    @property
-    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
+#    WRONG VALUE
+#    @property
+#    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
+
     @property
     def market(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
-    @property
-    def edge(self): return self.value - self.market
+
+#    WRONG VALUE
+#    @property
+#    def edge(self): return self.value - self.market
 
     @property
     def gamma(self): return (self.securities["gamma"] * self.position.map(int) * self.quantity).sum()
@@ -134,9 +137,6 @@ class Spread(ABC):
     def expires(self): return self.__expires
     @property
     def ticker(self): return self.__ticker
-
-
-
 
 
 
