@@ -22,6 +22,8 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
+# REORGANIZE THIS MODULE
+
 class NeighborhoodCalculator(Logging, ABC):
     def __init__(self, *args, neighbors=25, **kwargs):
         super().__init__(*args, **kwargs)
@@ -95,6 +97,8 @@ class CleaningCalculator(ABC):
         options = options[mask].dropna(how="all", inplace=False)
         return options
 
+
+# DECOUPLE THE VARIANCE WITH THE SCREENING
 
 class VarianceCalculator(ScreeningCalculator, CleaningCalculator, Equations):
     mae = lambda forward, strike, option: np.log(forward / strike.astype(float)) * option.astype(int)
