@@ -65,7 +65,7 @@ def gamma(x, k, τ, σ, i, r, q):
 
 @njit(cache=True, inline="always")
 def theta(x, k, τ, σ, i, r, q):
-    """dy/dτ"""
+    """-dy/dτ"""
     if not valid(x, k, τ, i) or σ <= 0.0 or not math.isfinite(r) or not math.isfinite(q): return math.nan
     zx = zitm(x, k, τ, σ, r, q)
     zk = zx - σ * math.sqrt(τ)

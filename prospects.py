@@ -23,41 +23,40 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-@dataclass(frozen=True)
-class Scenario:
-    movement: NumRange; days: NumRange; vols: NumRange
+@dataclass(frozen=True, slots=True)
+class Scenario: sigmas: int; days: int; vols: int
 
-@dataclass(frozen=True)
-class Greeks: delta: float; gamma: float; theta: float; vega: float; theta: float
+@dataclass(frozen=True, slots=True)
+class Greeks: delta: float; gamma: float; theta: float; vega: float
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Risk:
     greeks: Greeks; edge: float; underlying: float; volatility: float
 
-    def __call__(self, movement, /, days: int = 1, vols: int = 1):
-        delta = self.delta(movement)
-        gamma = self.gamma()
+    def __call__(self, days: int = 1, vols: int = 1, sigmas: int = 1):
+        delta = self.delta(sigmas, days)
+        gamma = self.gamma(sigmas, days)
         theta = self.theta(days)
         vega = self.vega(vols)
         return delta + gamma + theta + vega
 
-    def delta(self, movement):
-        underlying = self.underlying * self.volatility / math.sqrt(252)
-        delta = self.greeks.delta * underlying
-        return int(movement) * delta / max(abs(self.edge), 1e-12)
+    def delta(self, sigmas, days):
+        shock = self.underlying * self.volatility * sigmas
+        pnl = self.greeks.delta * shock * math.sqrt(days / 252)
+        return pnl / max(abs(self.edge), 1e-12)
 
-    def gamma(self):
-        underlying = self.underlying * self.volatility / math.sqrt(252)
-        gamma = 0.5 * self.greeks.gamma * underlying ** 2
-        return gamma / max(abs(self.edge), 1e-12)
+    def gamma(self, sigmas, days):
+        shock = self.underlying * self.volatility * sigmas
+        pnl = 0.5 * self.greeks.gamma * shock * math.sqrt(days / 252)
+        return pnl / max(abs(self.edge), 1e-12)
 
     def theta(self, days):
-        theta = self.greeks.theta * (days / 252)
-        return theta / max(abs(self.edge), 1e-12)
+        pnl = self.greeks.theta * (days / 365)
+        return pnl / max(abs(self.edge), 1e-12)
 
     def vega(self, vols):
-        vega = self.greeks.vega * (vols / 100)
-        return vega / max(abs(self.edge), 1e-12)
+        pnl = self.greeks.vega * (vols / 100)
+        return pnl / max(abs(self.edge), 1e-12)
 
 
 class Prospect(ABC):
