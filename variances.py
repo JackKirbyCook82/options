@@ -130,7 +130,7 @@ class VarianceStandardizer(Logging):
         return options
 
     def standardize(self, t, k, w, f):
-        μ = np.vectorize(f.z)(t, k)
+        μ = np.vectorize(f)(t, k)
         σ = self.neighborhood(t, k, w)
         σ = np.fromiter(σ, dtype=np.float64)
         ε = np.quantile(σ[σ > 0], 0.1) if np.any(σ > 0) else 1e-8

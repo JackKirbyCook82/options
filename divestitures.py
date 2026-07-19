@@ -6,7 +6,7 @@ Created on Mon Jul 6 2026
 
 """
 
-from options.spreads import Spread
+from options.prospects import Prospect
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -15,7 +15,7 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class Divestiture(Spread):
+class Divestiture(Prospect):
     @property
     def spent(self): return self.securities["spent"].sum()
     @property

@@ -65,19 +65,20 @@ def calculation(x, k, τ, σ, i, r, q):
     return y
 
 
+class ValuationSignatureError(Exception): pass
 class ValuationCalculator(Logging):
-    def __call__(self, options, /, interest, dividends, include=False, **kwargs):
+    def __call__(self, options, /, interest, dividends, signature, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        x = options["spot"].to_numpy(np.float64)
+        try: volatility, valuation = str(signature).split("->")
+        except AttributeError: raise ValuationSignatureError()
+        x = options["underlying"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
-        τ = options["tau"].to_numpy(np.float64) / 365
-        σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        valuations = calculation(x, k, τ, σ, i, float(interest), float(dividends))
-        valuations = pd.Series(valuations, name="bsm", index=options.index)
-        options = pd.concat([options, valuations], axis=1)
+        σ = options[volatility].to_numpy(np.float64)
+        try: τ = options["tau"].to_numpy(np.float64)
+        except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
+        options[valuation] = calculation(x, k, τ, σ, i, float(interest), float(dividends))
         self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
-
 
 

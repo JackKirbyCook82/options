@@ -49,10 +49,11 @@ class ForwardCalculator(Logging):
     def generator(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
-            spot = options["spot"].dropna(inplace=False).to_numpy()
-            tau = options["dte"].dropna(inplace=False).to_numpy() / 365
-            constants = dict(spot=spot[0], tau=tau[0])
-            assert (tau[0] == tau).all() and (spot[0] == spot).all()
+            underlying = options["underlying"].dropna(inplace=False).to_numpy()
+            try: tau = options["tau"].dropna(inplace=False).to_numpy()
+            except KeyError: tau = options["dte"].dropna(inplace=False).to_numpy() / 365
+            constants = dict(underlying=underlying[0], tau=tau[0])
+            assert (tau[0] == tau).all() and (underlying[0] == underlying).all()
             try:
                 samples = self.samples(options, **kwargs)
                 mask = samples["gap"] / samples["median"] <= self.tightness
@@ -90,9 +91,9 @@ class ForwardCalculator(Logging):
         return dict(forward=forward, discount=discount, error=np.NaN)
 
     @staticmethod
-    def tertiary(spot, tau, interest, dividends, **kwargs):
+    def tertiary(underlying, tau, interest, dividends, **kwargs):
         discount = np.exp(tau * (interest - dividends))
-        forward = spot * discount
+        forward = underlying * discount
         return dict(forward=forward, discount=discount, error=np.NaN)
 
     @staticmethod

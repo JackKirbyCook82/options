@@ -169,21 +169,23 @@ def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     return σ
 
 
+class VolatilitySignatureError(Exception): pass
 class VolatilityCalculator(Logging):
     def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    def __call__(self, options, /, interest, dividends, include=False, **kwargs):
+    def __call__(self, options, /, interest, dividends, signature, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        y = options["median"].to_numpy(np.float64)
-        x = options["spot"].to_numpy(np.float64)
+        try: valuation, volatility = str(signature).split("->")
+        except AttributeError: raise VolatilitySignatureError()
+        x = options["underlying"].to_numpy(np.float64)
+        y = options[valuation].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
-        τ = options["tau"].to_numpy(np.float64) / 365
         i = options["option"].apply(int).to_numpy(np.int8)
-        volatilities = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
-        volatilities = pd.Series(volatilities, name="implied", index=options.index)
-        options = pd.concat([options, volatilities], axis=1)
+        try: τ = options["tau"].to_numpy(np.float64)
+        except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
+        options[volatility] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 

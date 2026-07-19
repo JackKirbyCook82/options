@@ -12,16 +12,20 @@ from abc import ABC
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from finance.enumerations import Strategy
 from finance.osi import OSI
-from support.custom import DateRange
+from finance.enumerations import Spread
+from support.custom import DateRange, NumRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["Spread"]
+__all__ = ["Prospect"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
+
+@dataclass(frozen=True)
+class Scenario:
+    movement: NumRange; days: NumRange; vols: NumRange
 
 @dataclass(frozen=True)
 class Greeks: delta: float; gamma: float; theta: float; vega: float; theta: float
@@ -56,17 +60,17 @@ class Risk:
         return vega / max(abs(self.edge), 1e-12)
 
 
-class Spread(ABC):
-    def __init__(self, strategy, securities):
+class Prospect(ABC):
+    def __init__(self, spread, securities):
         assert isinstance(securities, pd.DataFrame)
         assert len(securities["ticker"].unique()) == 1
         assert len(securities["underlying"].unique()) == 1
         assert len(securities["volatility"].unique()) == 1
-        assert strategy in list(Strategy)
+        assert spread in list(Spread)
         self.__ticker = securities["ticker"].unique()[0]
         self.__expires = DateRange.create(securities["expire"].to_list())
         self.__securities = securities
-        self.__strategy = strategy
+        self.__spread = spread
 
     def __iter__(self):
         for osi, position, quantity in zip(self.osi, self.position, self.quantity):
@@ -82,29 +86,25 @@ class Spread(ABC):
 
     @property
     def zscore(self):
-        if self.strategy is Strategy.FLY:
+        if self.spread is Spread.FLY:
             left, center, right = self.securities["zscore"].to_numpy()
             return center - (left + right) / 2
-        elif self.strategy is Strategy.CALENDAR:
+        elif self.spread is Spread.CALENDAR:
             near, far = self.securities["zscore"].to_numpy()
             return far - near
-        else: raise ValueError(self.strategy)
+        else: raise ValueError(self.spread)
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
     @property
     def osi(self): return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
 
-#    WRONG VALUE
-#    @property
-#    def value(self): return (self.securities["value"] * self.position.map(int) * self.quantity).sum()
-
+    @property
+    def forcast(self): return (self.securities["forecast"] * self.position.map(int) * self.quantity).sum()
     @property
     def market(self): return (self.securities["median"] * self.position.map(int) * self.quantity).sum()
-
-#    WRONG VALUE
-#    @property
-#    def edge(self): return self.value - self.market
+    @property
+    def edge(self): return self.forcast - self.market
 
     @property
     def gamma(self): return (self.securities["gamma"] * self.position.map(int) * self.quantity).sum()
@@ -132,7 +132,7 @@ class Spread(ABC):
     @property
     def securities(self): return self.__securities
     @property
-    def strategy(self): return self.__strategy
+    def spread(self): return self.__spread
     @property
     def expires(self): return self.__expires
     @property

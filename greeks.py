@@ -139,20 +139,40 @@ def calculation(x, k, τ, σ, i, r, q):
     return Δ, Γ, Θ, Ρ, V, Φ, Ψ, Χ
 
 
+class GreekSignatureError(Exception): pass
+class GreekRequestingError(Exception): pass
 class GreekCalculator(Logging):
-    def __call__(self, options, /, interest, dividends, **kwargs):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        calculated = ["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"]
+        requesting = kwargs.get("greeks", calculated)
+        if any([greek not in calculated for greek in requesting]): raise GreekRequestingError()
+        self.__calculated = calculated
+        self.__requesting = requesting
+
+    def __call__(self, options, /, interest, dividends, signature, delimiter=None, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        spot = options["spot"].to_numpy(np.float64)
-        strike = options["strike"].to_numpy(np.float64)
-        tau = options["tau"].to_numpy(np.float64) / 365
-        implied = options["implied"].to_numpy(np.float64)
-        option = options["option"].apply(int).to_numpy(np.int8)
-        greeks = list(calculation(spot, strike, tau, implied, option, float(interest), float(dividends)))
-        greeks = dict(zip(["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"], greeks))
+        try: volatility, prefix = str(signature).split("->")
+        except AttributeError: raise GreekSignatureError()
+        x = options["underlying"].to_numpy(np.float64)
+        k = options["strike"].to_numpy(np.float64)
+        i = options["option"].apply(int).to_numpy(np.int8)
+        σ = options[volatility].to_numpy(np.float64)
+        try: τ = options["tau"].to_numpy(np.float64)
+        except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
+        calculated = list(calculation(x, k, τ, σ, i, float(interest), float(dividends)))
+        calculated = dict(zip(self.calculated, calculated))
+        greeks = {requested: calculated[requested] for requested in self.requesting}
+        if bool(delimiter): greeks = {str(delimiter).join([prefix, key]): value for key, value in greeks.items()}
         greeks = pd.DataFrame(greeks, index=options.index)
         options = pd.concat([options, greeks], axis=1)
         self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
+
+    @property
+    def calculated(self): return self.__calculated
+    @property
+    def requesting(self): return self.__requesting
 
 
 
