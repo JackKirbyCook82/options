@@ -24,8 +24,7 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", "activity", "median", "gap", "dte", "tau"]):
-    tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
+class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", "activity", "median", "gap", "dte"]):
     dte = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
     moneyness = lambda spot, strike, option: np.log(spot / strike.astype(float)) * option.astype(int)
     activity = lambda supply, demand: np.minimum(supply, demand) / (np.maximum(supply, demand) + 10)
@@ -95,10 +94,6 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
         if bool(options.empty): return options
         sanity = self.execute(options, **kwargs).squeeze()
         self.results(options, title="Calculated", instrument=Instrument.OPTION)
-        options = self.filter(options, sanity)
-        return options
-
-    def filter(self, options, sanity):
         previous = len(options.index)
         options = options.where(sanity["sanity"]).dropna(how="all", inplace=False)
         post = len(options.index)
@@ -129,16 +124,12 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
         if bool(options.empty): return options
         viability = self.execute(options, **kwargs)
         self.results(options, title="Calculated", instrument=Instrument.OPTION)
-        options = self.filter(options, viability)
-        self.breakdown(viability)
-        return options
-
-    def filter(self, options, viability):
         previous = len(options.index)
         options = options.where(viability["viability"]).dropna(how="all", inplace=False)
         post = len(options.index)
         sizes = dict(previous=previous, post=post)
         self.results(options, title="Filtered", instrument=Instrument.OPTION, **sizes)
+        self.breakdown(viability)
         return options
 
     def breakdown(self, viabilities):

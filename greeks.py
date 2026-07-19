@@ -144,7 +144,7 @@ class GreekCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         spot = options["spot"].to_numpy(np.float64)
         strike = options["strike"].to_numpy(np.float64)
-        tau = options["tau"].to_numpy(np.float64)
+        tau = options["tau"].to_numpy(np.float64) / 365
         implied = options["implied"].to_numpy(np.float64)
         option = options["option"].apply(int).to_numpy(np.int8)
         greeks = list(calculation(spot, strike, tau, implied, option, float(interest), float(dividends)))

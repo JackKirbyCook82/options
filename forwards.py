@@ -50,7 +50,7 @@ class ForwardCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
             spot = options["spot"].dropna(inplace=False).to_numpy()
-            tau = options["tau"].dropna(inplace=False).to_numpy()
+            tau = options["dte"].dropna(inplace=False).to_numpy() / 365
             constants = dict(spot=spot[0], tau=tau[0])
             assert (tau[0] == tau).all() and (spot[0] == spot).all()
             try:

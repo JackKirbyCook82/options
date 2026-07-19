@@ -179,7 +179,7 @@ class VolatilityCalculator(Logging):
         y = options["median"].to_numpy(np.float64)
         x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
-        τ = options["tau"].to_numpy(np.float64)
+        τ = options["tau"].to_numpy(np.float64) / 365
         i = options["option"].apply(int).to_numpy(np.int8)
         volatilities = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         volatilities = pd.Series(volatilities, name="implied", index=options.index)

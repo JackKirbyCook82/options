@@ -70,7 +70,7 @@ class ValuationCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         x = options["spot"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
-        τ = options["tau"].to_numpy(np.float64)
+        τ = options["tau"].to_numpy(np.float64) / 365
         σ = options["volatility"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
         valuations = calculation(x, k, τ, σ, i, float(interest), float(dividends))
