@@ -20,8 +20,8 @@ class Divestiture(Prospect):
     def spent(self): return self.securities["spent"].sum()
     @property
     def liquidate(self):
-        selling = (self.securities["bid"] * ((self.position.map(int) + 1) / 2) * self.quantity).sum()
-        buying = (self.securities["ask"] * ((self.position.map(int) - 1) / 2) * self.quantity).sum()
+        selling = (self.securities["bid"] * ((self.positions.map(int) + 1) / 2) * self.quantities).sum()
+        buying = (self.securities["ask"] * ((self.positions.map(int) - 1) / 2) * self.quantities).sum()
         return selling - buying
 
     @property
@@ -30,5 +30,6 @@ class Divestiture(Prospect):
     def loss(self): return max(self.spent - self.market, 0)
     @property
     def profit(self): return self.liquidate - self.spent
+
 
 
