@@ -90,9 +90,9 @@ class LocalizingCalculator(Logging, ABC):
         self.__overlap = float(overlap)
         self.__samples = int(samples)
 
-    def centers(self, options):
-        taus = np.sort(options["tau"].unique().astype(float))
-        mae = options["mae"].to_numpy(dtype=float)
+    def centers(self, generalized):
+        taus = np.sort(generalized["tau"].unique().astype(float))
+        mae = generalized["mae"].to_numpy(dtype=float)
         low, high = np.nanmin(mae), np.nanmax(mae)
         step = self.localizing.maes.radii.inner / 2
         maes = np.arange(low, high + step, step, dtype=float)
@@ -114,13 +114,13 @@ class LocalizingCalculator(Logging, ABC):
             population = NumRange.create([center - radius, center + radius])
             yield Mae(population=population, center=center, span=radius)
 
-    def adequate(self, localized):
-        tau = localized["tau"].nunique() >= self.localizing.taus.coverage
-        mae = localized["mae"].nunique() >= self.localizing.maes.coverage
-        return (len(localized) >= self.samples) and tau and mae
+    def adequate(self, proposed):
+        tau = proposed["tau"].nunique() >= self.localizing.taus.coverage
+        mae = proposed["mae"].nunique() >= self.localizing.maes.coverage
+        return (len(proposed) >= self.samples) and tau and mae
 
-    def similar(self, localized, history):
-        current = set(localized.index)
+    def similar(self, proposed, history):
+        current = set(proposed.index)
         for prior in history:
             union = len(current | prior)
             if union == 0: continue
@@ -134,20 +134,20 @@ class LocalizingCalculator(Logging, ABC):
     def generator(self, *args, **kwargs): pass
 
     @staticmethod
-    def contained(localized, spread, key="osi"):
+    def contained(proposed, localized, key="osi"):
         assert key == "osi"
-        if key in localized.columns and key in spread.columns:
-            available = set(localized[key].dropna())
-            required = set(spread[key].dropna())
+        if key in proposed.columns and key in localized.columns:
+            available = set(proposed[key].dropna())
+            required = set(localized[key].dropna())
             return required.issubset(available)
         return True
 
     @staticmethod
-    def localize(options, local):
+    def localize(generalized, local):
         assert isinstance(local, Local)
-        tau = options["tau"].isin(local.tau.population)
-        mae = options["mae"].between(local.mae.population.minimum, local.mae.population.maximum)
-        localized = options[tau & mae].copy()
+        tau = generalized["tau"].isin(local.tau.population)
+        mae = generalized["mae"].between(local.mae.population.minimum, local.mae.population.maximum)
+        localized = generalized[tau & mae].copy()
         localized.attrs["tau"] = local.tau
         localized.attrs["mae"] = local.mae
         return localized
@@ -179,27 +179,27 @@ class LocalizingCalculator(Logging, ABC):
 
 
 class ProximityCalculator(LocalizingCalculator):
-    def __call__(self, options, spreads, **kwargs):
-        assert isinstance(options, pd.DataFrame) and not options.empty
+    def __call__(self, generalized, spreads, **kwargs):
+        assert isinstance(generalized, pd.DataFrame) and not generalized.empty
         assert isinstance(spreads, pd.DataFrame) and not spreads.empty
-        options = self.cleaner(options)
+        generalized = self.cleaner(generalized)
         spreads = self.cleaner(spreads)
-        proximity = self.calculator(options, spreads, **kwargs)
+        proximity = self.calculator(generalized, spreads, **kwargs)
         self.results(proximity, title="Calculated", instrument=Instrument.OPTION)
         return proximity
 
-    def calculator(self, options, spreads, **kwargs):
-        for local in self.generator(options, spreads, **kwargs):
-            localized = self.localize(options, local)
-            if not self.adequate(localized): continue
-            if not self.contained(localized, spreads): continue
-            return localized
+    def calculator(self, generalized, localized, **kwargs):
+        for local in self.generator(generalized, localized, **kwargs):
+            proximity = self.localize(generalized, local)
+            if not self.adequate(proximity): continue
+            if not self.contained(proximity, localized): continue
+            return proximity
         raise ProximityLocalizingError()
 
-    def generator(self, options, spreads, **kwargs):
-        centers = self.centers(options)
-        tauCenter = float(spreads["tau"].mean())
-        maeCenter = float(spreads["mae"].mean())
+    def generator(self, generalized, localized, **kwargs):
+        centers = self.centers(generalized)
+        tauCenter = float(localized["tau"].mean())
+        maeCenter = float(localized["mae"].mean())
         distances = np.abs(centers.tau.astype(float) - float(tauCenter))
         index = int(np.argmin(distances))
         for tau in self.taus(tauCenter, centers.tau, index=index):
@@ -208,25 +208,25 @@ class ProximityCalculator(LocalizingCalculator):
 
 
 class PartitionCalculator(LocalizingCalculator):
-    def __call__(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame) and not options.empty
-        options = self.cleaner(options)
-        for local in self.calculator(options, **kwargs):
+    def __call__(self, generalized, /, **kwargs):
+        assert isinstance(generalized, pd.DataFrame) and not generalized.empty
+        generalized = self.cleaner(generalized)
+        for local in self.calculator(generalized, **kwargs):
             self.results(local, title="Calculated", instrument=Instrument.OPTION)
             yield local
 
-    def calculator(self, options, **kwargs):
+    def calculator(self, generalized, **kwargs):
         history = list()
-        for local in self.generator(options, **kwargs):
-            localized = self.localize(options, local)
-            if not self.adequate(localized): continue
-            if self.similar(localized, history): continue
-            index = set(localized.index)
+        for local in self.generator(generalized, **kwargs):
+            partition = self.localize(generalized, local)
+            if not self.adequate(partition): continue
+            if self.similar(partition, history): continue
+            index = set(partition.index)
             history.append(index)
-            yield localized
+            yield partition
 
-    def generator(self, options, **kwargs):
-        centers = self.centers(options)
+    def generator(self, generalized, **kwargs):
+        centers = self.centers(generalized)
         for index, tauCenter in enumerate(centers.tau):
             for tau in self.taus(tauCenter, centers.tau, index=index):
                 for maeCenter in centers.mae:
