@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 from finance.osi import OSI
 from finance.enumerations import Spread, Position
-from support.custom import DateRange, NumRange
+from support.custom import DateRange, NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -30,7 +30,7 @@ class Scenario: days: int; vols: int; sigma: int; probability: Optional[float] =
 
 @dataclass(frozen=True, slots=True)
 class Scenarios:
-    days: NumRange; vols: NumRange; sigma: NumRange
+    days: NumberRange; vols: NumberRange; sigma: NumberRange
 
     def __iter__(self):
         generator = product(self.days, self.vols, self.sigma)
@@ -81,7 +81,7 @@ class Prospect(ABC):
         assert len(securities["volatility"].unique()) == 1
         assert spread in list(Spread)
         self.__ticker = securities["ticker"].unique()[0]
-        self.__expires = DateRange.create(securities["expire"].to_list())
+        self.__expires = DateRange(securities["expire"].to_list())
         self.__securities = securities
         self.__scenarios = scenarios
         self.__spread = spread

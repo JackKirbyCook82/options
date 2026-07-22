@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 
 from finance.enumerations import Instrument
 from finance.logging import Logging
-from support.custom import NumRange
+from support.custom import NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -46,7 +46,7 @@ class Radii:
 class Tau: population: NDArray[np.floating]; center: float; span: int
 
 @dataclass(frozen=True)
-class Mae: population: NumRange; center: float; span: float
+class Mae: population: NumberRange; center: float; span: float
 
 @dataclass(frozen=True)
 class Local: tau: Tau; mae: Mae
@@ -111,7 +111,7 @@ class LocalizingCalculator(Logging, ABC):
 
     def maes(self, center):
         for radius in self.localizing.maes.radii:
-            population = NumRange.create([center - radius, center + radius])
+            population = NumberRange([center - radius, center + radius])
             yield Mae(population=population, center=center, span=radius)
 
     def adequate(self, proposed):

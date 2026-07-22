@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from finance.enumerations import Instrument
 from finance.logging import Logging
 from support.equations import Equations
-from support.custom import NumRange
+from support.custom import NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -43,7 +43,7 @@ class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", 
 
 class SurvivalCalculator(Logging):
     def __init__(self, *args, tight, money, active, gridsize=25, **kwargs):
-        assert isinstance(tight, (float, NumRange)) and isinstance(money, (float, NumRange)) and isinstance(active, (float, NumRange))
+        assert isinstance(tight, (float, NumberRange)) and isinstance(money, (float, NumberRange)) and isinstance(active, (float, NumberRange))
         assert isinstance(gridsize, int)
         super().__init__(*args, **kwargs)
         self.__viability = Viability(tight, money, active)
@@ -104,11 +104,11 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
 
 @dataclass(frozen=True)
 class Viability:
-    tight: float | NumRange; money: float | NumRange; active: int | NumRange
+    tight: float | NumberRange; money: float | NumberRange; active: int | NumberRange
 
     def __iter__(self): yield self.tight; yield self.money; yield self.active
     def __call__(self, gridsize):
-        function = lambda variable: np.linspace(variable.minimum, variable.maximum, gridsize) if isinstance(variable, NumRange) else np.array([variable])
+        function = lambda variable: np.linspace(variable.minimum, variable.maximum, gridsize) if isinstance(variable, NumberRange) else np.array([variable])
         variables = [function(variable) for variable in iter(self)]
         yield from product(*variables)
 
