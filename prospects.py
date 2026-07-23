@@ -8,34 +8,18 @@ Created on Sat May 16 2026
 
 import math
 import pandas as pd
-from abc import ABC
-from typing import Optional
-from itertools import product
 from dataclasses import dataclass
 from types import SimpleNamespace
 
 from finance.osi import OSI
 from finance.enumerations import Spread, Position
-from support.custom import DateRange, NumberRange
+from support.custom import DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["Prospect"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
-
-
-@dataclass(frozen=True, slots=True)
-class Scenario: days: int; vols: int; sigma: int; probability: Optional[float] = None
-
-@dataclass(frozen=True, slots=True)
-class Scenarios:
-    days: NumberRange; vols: NumberRange; sigma: NumberRange
-
-    def __iter__(self):
-        generator = product(self.days, self.vols, self.sigma)
-        for days, vols, sigma in generator:
-            yield Scenario(days=days, vols=vols, sigma=sigma)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,8 +57,8 @@ class Risk:
         return pnl / max(abs(self.edge), 1e-12)
 
 
-class Prospect(ABC):
-    def __init__(self, spread, securities, scenarios):
+class Prospect(object):
+    def __init__(self, spread, securities):
         assert isinstance(securities, pd.DataFrame)
         assert len(securities["ticker"].unique()) == 1
         assert len(securities["underlying"].unique()) == 1
@@ -83,28 +67,11 @@ class Prospect(ABC):
         self.__ticker = securities["ticker"].unique()[0]
         self.__expires = DateRange(securities["expire"].to_list())
         self.__securities = securities
-        self.__scenarios = scenarios
         self.__spread = spread
 
     def __iter__(self):
         for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
-
-    @property
-    def var(self):
-        position = lambda drift: Position((drift > 0) - (drift < 0))
-        drifts = [self.risk(scenario) * self.edge for scenario in self.scenarios]
-        unfavorable = [abs(drift) for drift in drifts if position(drift) != self.position]
-        var = max(unfavorable)
-        return var
-
-    @property
-    def risk(self):
-        assert len(self.securities["underlying"].unique()) == 1
-        underlying = self.securities["underlying"].values[0]
-        volatility = self.securities["implied"].mean()
-        greeks = Greeks(**self.greeks)
-        return Risk(greeks, self.edge, underlying, volatility)
 
     @property
     def zscore(self):
@@ -115,6 +82,14 @@ class Prospect(ABC):
             near, far = self.securities["zscore"].to_numpy()
             return far - near
         else: raise ValueError(self.spread)
+
+    @property
+    def risk(self):
+        assert len(self.securities["underlying"].unique()) == 1
+        underlying = self.securities["underlying"].values[0]
+        volatility = self.securities["implied"].mean()
+        greeks = Greeks(**self.greeks)
+        return Risk(greeks, self.edge, underlying, volatility)
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
@@ -155,8 +130,6 @@ class Prospect(ABC):
 
     @property
     def securities(self): return self.__securities
-    @property
-    def scenarios(self): return self.__scenarios
     @property
     def spread(self): return self.__spread
     @property
