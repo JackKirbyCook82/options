@@ -12,18 +12,24 @@ from abc import ABC, abstractmethod
 from options.prospects import Prospect
 from finance.enumerations import Spread, Instrument, Option, Position
 from finance.specifications import Securities
-from finance.logging import Logging
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["AcquisitionCalculator"]
+__all__ = ["AcquisitionCreators"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
 class Acquisition(Prospect):
     pass
+
+
+class AcquisitionCreators(object):
+    def __new__(cls, *args, spreads, **kwargs):
+        spreads = [spread for spread in spreads if spread != Spread.EMPTY]
+        instances = [AcquisitionCreator[spread](*args, **kwargs) for spread in spreads]
+        return instances
 
 
 class AcquisitionCreator(ABC, metaclass=RegistryMeta):
@@ -85,7 +91,7 @@ class FlyAcquisitionCreator(AcquisitionCreator, register=Spread.FLY):
         securities["position"] = [hedge, position, hedge]
         securities["quantity"] = [1, 2, 1]
         prospect = Acquisition(Spread.FLY, securities)
-        yield prospect
+        return prospect
 
 
 class CalendarAcquisitionCreator(AcquisitionCreator, register=Spread.CALENDAR):
@@ -108,34 +114,7 @@ class CalendarAcquisitionCreator(AcquisitionCreator, register=Spread.CALENDAR):
         securities["position"] = [hedge, position]
         securities["quantity"] = [1, 1]
         prospect = Acquisition(Spread.CALENDAR, securities)
-        yield prospect
-
-
-class AcquisitionCalculator(Logging):
-    def __init__(self, *args, spreads, metrics, **kwargs):
-        super().__init__(*args, **kwargs)
-        creators = {spread: AcquisitionCreator[spread](*args, **kwargs) for spread in spreads}
-        self.__creators = creators
-        self.__metrics = metrics
-
-    def __call__(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        prospects = self.calculator(options, **kwargs)
-        prospects = list(prospects)
-        self.results(prospects, title="Calculator", instrument=Instrument.SPREAD)
-        return prospects
-
-    def calculator(self, options, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        for spread, creator in self.creators.items():
-            for prospect in creator(options, **kwargs):
-                if not self.metrics(prospect): continue
-                yield prospect
-
-    @property
-    def creators(self): return self.__creators
-    @property
-    def metrics(self): return self.__metrics
+        return prospect
 
 
 

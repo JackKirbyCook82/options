@@ -33,20 +33,20 @@ class ForwardCalculator(Logging):
 
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        options = self.generate(options, **kwargs)
+        options = self.calculate(options, **kwargs)
         options = options.sort_index(inplace=False)
         self.results(options, title="Calculated", instrument=Instrument.OPTION)
         return options
 
-    def generate(self, options, /, **kwargs):
+    def calculate(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
-        generator = self.generator(options, **kwargs)
+        generator = self.calculator(options, **kwargs)
         options = list(generator)
         if bool(options): options = pd.concat(options, axis=0)
         else: options = pd.DataFrame(columns=options.columns)
         return options
 
-    def generator(self, options, /, **kwargs):
+    def calculator(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
             underlying = options["underlying"].dropna(inplace=False).to_numpy()

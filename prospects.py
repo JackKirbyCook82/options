@@ -12,12 +12,13 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from finance.osi import OSI
-from finance.enumerations import Spread, Position
+from finance.logging import Logging
+from finance.enumerations import Spread, Instrument, Position
 from support.custom import DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["Prospect"]
+__all__ = ["ProspectCalculator", "Prospect"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -106,13 +107,15 @@ class Prospect(object):
     def edge(self): return self.forcast - self.market
 
     @property
+    def delta(self): return (self.securities["delta"] * self.positions.map(int) * self.quantities).sum()
+    @property
     def gamma(self): return (self.securities["gamma"] * self.positions.map(int) * self.quantities).sum()
     @property
     def theta(self): return (self.securities["theta"] * self.positions.map(int) * self.quantities).sum()
     @property
     def vega(self): return (self.securities["vega"] * self.positions.map(int) * self.quantities).sum()
     @property
-    def greeks(self): return dict(gamma=self.gamma, theta=self.theta, vega=self.vega)
+    def greeks(self): return dict(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
 
     @property
     def gap(self): return (self.securities["gap"] * self.quantities).sum()
@@ -136,6 +139,42 @@ class Prospect(object):
     def expires(self): return self.__expires
     @property
     def ticker(self): return self.__ticker
+
+
+class ProspectCalculator(Logging):
+    def __init__(self, *args, creators, metrics, priority, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__creators = creators
+        self.__priority = priority
+        self.__metrics = metrics
+
+    def __call__(self, holdings, /, **kwargs):
+        assert isinstance(holdings, pd.DataFrame)
+        prospects = self.calculate(holdings, **kwargs)
+        self.results(prospects, title="Calculator", instrument=Instrument.SPREAD)
+        return prospects
+
+    def calculate(self, holdings, /, **kwargs):
+        assert isinstance(holdings, pd.DataFrame)
+        prospects = self.calculator(holdings, **kwargs)
+        prospects = list(prospects)
+        priorities = [self.priority(prospect) for prospect in prospects].__getitem__
+        prospects = (prospects[index] for index in sorted(range(len(prospects)), key=priorities, reverse=True))
+        return prospects
+
+    def calculator(self, holdings, /, **kwargs):
+        assert isinstance(holdings, pd.DataFrame)
+        for spread, creator in self.creators.items():
+            for prospect in creator(holdings, **kwargs):
+                if not self.metrics(prospect): continue
+                yield prospect
+
+    @property
+    def creators(self): return self.__creators
+    @property
+    def priority(self): return self.__priority
+    @property
+    def metrics(self): return self.__metrics
 
 
 
