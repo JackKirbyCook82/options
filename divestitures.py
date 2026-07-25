@@ -41,7 +41,7 @@ class Divestiture(Prospect):
 class DivestitureCreators(object):
     def __new__(cls, *args, spreads, **kwargs):
         spreads = [spread for spread in spreads if spread != Spread.EMPTY]
-        instances = [DivestitureCreator[spread](*args, **kwargs) for spread in spreads]
+        instances = {spread: DivestitureCreator[spread](*args, **kwargs) for spread in spreads}
         return instances
 
 

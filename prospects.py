@@ -8,19 +8,34 @@ Created on Sat May 16 2026
 
 import math
 import pandas as pd
+from typing import Optional
+from itertools import product
 from dataclasses import dataclass
 from types import SimpleNamespace
 
 from finance.osi import OSI
 from finance.logging import Logging
 from finance.enumerations import Spread, Instrument, Position
-from support.custom import DateRange
+from support.custom import DateRange, NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["ProspectCalculator", "Prospect"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass(frozen=True, slots=True)
+class Scenario: calender: int; trading: int; vols: int; sigma: int; probability: Optional[float] = None
+
+@dataclass(frozen=True, slots=True)
+class Scenarios:
+    calender: NumberRange; trading: NumberRange; vols: NumberRange; sigma: NumberRange
+
+    def __iter__(self):
+        generator = product(self.calender, self.trading, self.vols, self.sigma)
+        for calender, trading, vols, sigma in generator:
+            yield Scenario(calender=calender, trading=trading, vols=vols, sigma=sigma)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,20 +52,20 @@ class Risk:
         vega = self.vega(scenario.vols)
         return delta + gamma + theta + vega
 
-    def shock(self, days, sigma):
+    def shock(self, trading, sigma):
         movement = self.underlying * self.volatility * sigma
-        return movement * math.sqrt(days / 365)
+        return movement * math.sqrt(trading / 252)
 
-    def delta(self, days, sigma):
-        pnl = self.greeks.delta * self.shock(days, sigma)
+    def delta(self, trading, sigma):
+        pnl = self.greeks.delta * self.shock(trading, sigma)
         return pnl / max(abs(self.edge), 1e-12)
 
-    def gamma(self, days, sigma):
-        pnl = 0.5 * self.greeks.gamma * self.shock(days, sigma) ** 2
+    def gamma(self, trading, sigma):
+        pnl = 0.5 * self.greeks.gamma * self.shock(trading, sigma) ** 2
         return pnl / max(abs(self.edge), 1e-12)
 
-    def theta(self, days):
-        pnl = self.greeks.theta * (days / 365)
+    def theta(self, calender):
+        pnl = self.greeks.theta * (calender / 365)
         return pnl / max(abs(self.edge), 1e-12)
 
     def vega(self, vols):
@@ -63,16 +78,26 @@ class Prospect(object):
         assert isinstance(securities, pd.DataFrame)
         assert len(securities["ticker"].unique()) == 1
         assert len(securities["underlying"].unique()) == 1
-        assert len(securities["volatility"].unique()) == 1
         assert spread in list(Spread)
         self.__ticker = securities["ticker"].unique()[0]
         self.__expires = DateRange(securities["expire"].to_list())
         self.__securities = securities
         self.__spread = spread
 
+    def __str__(self):
+        securities = [f"{str(record.osi)}={int(record.position) * int(record.quantity):.0f}" for record in self]
+        valuation = f"{str(self.spread).title()} @ ${self.edge}"
+        return "\n".join([valuation] + securities)
+
     def __iter__(self):
         for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
+
+    def var(self, scenarios):
+        position = lambda drift: Position((drift > 0) - (drift < 0))
+        drifts = [self.risk(scenario) * self.edge for scenario in scenarios]
+        unfavorable = [abs(drift) for drift in drifts if position(drift) != self.position]
+        return max(unfavorable)
 
     @property
     def zscore(self):

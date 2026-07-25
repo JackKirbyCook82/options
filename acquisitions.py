@@ -28,7 +28,7 @@ class Acquisition(Prospect):
 class AcquisitionCreators(object):
     def __new__(cls, *args, spreads, **kwargs):
         spreads = [spread for spread in spreads if spread != Spread.EMPTY]
-        instances = [AcquisitionCreator[spread](*args, **kwargs) for spread in spreads]
+        instances = {spread: AcquisitionCreator[spread](*args, **kwargs) for spread in spreads}
         return instances
 
 
