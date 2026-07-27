@@ -10,7 +10,7 @@ import pandas as pd
 from abc import ABC, abstractmethod
 
 from options.prospects import Prospect
-from finance.enumerations import Spread, Instrument, Option, Position
+from finance.enumerations import Spread, Instrument, Option, Position, Intent
 from finance.specifications import Securities
 from support.meta import RegistryMeta
 
@@ -22,7 +22,19 @@ __license__ = "MIT License"
 
 
 class Acquisition(Prospect):
-    pass
+    @property
+    def commissions(self): return self.costing.commissions * self.quantities.sum() * 2
+    @property
+    def slippage(self): return (self.costing.slippage.entry + self.costing.slippage.exit) * self.gap
+    @property
+    def intent(self): return Intent.OPEN
+
+    @property
+    def forecasted(self): return self.revenue / (self.expense + self.cost) - 1
+    @property
+    def revenue(self): return + max(0.0, self.forecast) + max(0.0, self.market)
+    @property
+    def expense(self): return - min(0.0, self.forecast) - min(0.0, self.market)
 
 
 class AcquisitionCreators(object):

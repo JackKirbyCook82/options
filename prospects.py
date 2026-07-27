@@ -6,11 +6,11 @@ Created on Sat May 16 2026
 
 """
 
-import math
 import pandas as pd
 from typing import Optional
 from dataclasses import dataclass
 from types import SimpleNamespace
+from abc import ABC, abstractmethod
 from functools import cached_property
 
 from finance.osi import OSI
@@ -20,35 +20,34 @@ from support.custom import DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ProspectCalculator", "Prospect"]
+__all__ = ["ProspectCalculator", "Prospect", "Costing", "Slippage", "Scenario"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
 @dataclass(frozen=True, slots=True)
+class Slippage: entry: float = 0.25; exit: float = 0.35
+
+@dataclass(frozen=True, slots=True)
+class Costing: slippage: Slippage | float; commissions: float = 0.65
+
+@dataclass(frozen=True, slots=True)
 class Greeks: delta: float; gamma: float; theta: float; vega: float
+
+@dataclass(frozen=True, slots=True)
+class Risk: greeks: Greeks; underlying: float; volatility: float
 
 @dataclass(frozen=True, slots=True)
 class Scenario:
     cdays: int; tdays: int; vpts: float; sigmas: float
-    probability: Optional[float] = None
+    odds: Optional[float] = None
     name: Optional[str] = None
 
-@dataclass(frozen=True, slots=True)
-class Risk:
-    greeks: Greeks; underlying: float; volatility: float
 
-    def __call__(self, scenario):
-        shock = self.underlying * self.volatility * scenario.sigmas * math.sqrt(scenario.tdays / 252)
-        delta = self.greeks.delta * shock
-        gamma = self.greeks.gamma * (shock ** 2) / 2
-        theta = self.greeks.theta * (scenario.cdays / 365)
-        vega = self.greeks.vega * (scenario.vpts / 100)
-        return delta + gamma + theta + vega
-
-
-class Prospect(object):
-    def __init__(self, spread, securities):
+class Prospect(ABC):
+    def __init__(self, spread, securities, /, costing, scenarios):
+        assert isinstance(scenarios, list) and all([isinstance(scenario, Scenario) for scenario in scenarios])
+        assert isinstance(costing, Costing)
         assert isinstance(securities, pd.DataFrame)
         assert len(securities["ticker"].unique()) == 1
         assert len(securities["underlying"].unique()) == 1
@@ -59,28 +58,13 @@ class Prospect(object):
         self.__underlying = securities["underlying"].unique()[0]
         self.__volatility = securities["volatility"].unique()[0]
         self.__securities = securities
+        self.__scenarios = scenarios
+        self.__costing = costing
         self.__spread = spread
-
-    def __str__(self):
-        securities = [f"{str(record.osi)}={int(record.position) * int(record.quantity):.0f}" for record in self]
-        valuation = f"{str(self.spread).title()} @ ${self.edge}"
-        return "\n".join([valuation] + securities)
 
     def __iter__(self):
         for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
-
-#    def pnl(self, scenario): return ((self.edge > 0) - (self.edge < 0)) * self.risk(scenario)
-#    def var(self, scenarios): return max((max(0.0, -self.pnl(scenario)) for scenario in scenarios), default=0.0)
-#    def ear(self, scenarios): return self.var(scenarios) / max(abs(self.edge), 1e-12)
-
-#    @cached_property
-#    def risk(self):
-#        assert len(self.securities["underlying"].unique()) == 1
-#        underlying = self.securities["underlying"].values[0]
-#        volatility = self.securities["implied"].mean()
-#        greeks = Greeks(**self.greeks)
-#        return Risk(greeks, underlying, volatility)
 
     @cached_property
     def zspread(self):
@@ -92,14 +76,22 @@ class Prospect(object):
             return far - near
         else: raise ValueError(self.spread)
 
+    @property
+    def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
+    @property
+    def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
+
     @cached_property
-    def forcast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
+    def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
     @cached_property
     def market(self): return (self.securities["median"] * self.positions.map(int) * self.quantities).sum()
     @cached_property
     def position(self): return Position((self.edge > 0) - (self.edge < 0))
+
     @cached_property
-    def edge(self): return self.forcast - self.market
+    def edge(self): return (self.forecast - self.market) * int(self.position)
+    @cached_property
+    def cost(self): return self.commissions + self.slippage
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
@@ -114,8 +106,6 @@ class Prospect(object):
     def theta(self): return (self.securities["theta"] * self.positions.map(int) * self.quantities).sum()
     @property
     def vega(self): return (self.securities["vega"] * self.positions.map(int) * self.quantities).sum()
-    @property
-    def greeks(self): return dict(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
 
     @property
     def gap(self): return (self.securities["gap"] * self.quantities).sum()
@@ -132,11 +122,25 @@ class Prospect(object):
     def quantities(self): return self.securities["quantity"]
 
     @property
+    @abstractmethod
+    def commissions(self): pass
+    @property
+    @abstractmethod
+    def slippage(self): pass
+    @property
+    @abstractmethod
+    def intent(self): pass
+
+    @property
     def securities(self): return self.__securities
     @property
     def underlying(self): return self.__underlying
     @property
     def volatility(self): return self.__volatility
+    @property
+    def scenarios(self): return self.__scenarios
+    @property
+    def costing(self): return self.__costing
     @property
     def spread(self): return self.__spread
     @property
