@@ -7,10 +7,12 @@ Created on Mon Jul 6 2026
 """
 
 import pandas as pd
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from functools import cached_property
 
 from options.prospects import Prospect
-from finance.enumerations import Spread, Instrument, Option, Position, Intent
+from finance.enumerations import Spread, Instrument, Option, Position, Intent, Action
 from finance.specifications import Securities
 from support.meta import RegistryMeta
 
@@ -19,6 +21,13 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["AcquisitionCreators"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass(frozen=True, slots=True)
+class Metrics: pass
+
+@dataclass(frozen=True, slots=True)
+class Priority: pass
 
 
 class Acquisition(Prospect):
@@ -30,11 +39,14 @@ class Acquisition(Prospect):
     def intent(self): return Intent.OPEN
 
     @property
-    def forecasted(self): return self.revenue / (self.expense + self.cost) - 1
+    def forecasted(self): return (self.spot.revenue + self.future.revenue) / (self.spot.expense + self.future.expense + self.cost) - 1
     @property
-    def revenue(self): return + max(0.0, self.forecast) + max(0.0, self.market)
-    @property
-    def expense(self): return - min(0.0, self.forecast) - min(0.0, self.market)
+    def multiple(self): return self.edge / self.cost
+
+    @cached_property
+    def future(self): return self.cashflow(self.forecast, action=Action.SELL)
+    @cached_property
+    def spot(self): return self.cashflow(self.market, action=Action.BUY)
 
 
 class AcquisitionCreators(object):

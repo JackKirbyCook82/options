@@ -8,12 +8,11 @@ Created on Mon Jul 6 2026
 
 import pandas as pd
 from dataclasses import dataclass
-from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
 
 from options.prospects import Prospect
-from finance.enumerations import Spread, Position, Intent
+from finance.enumerations import Spread, Position, Intent, Action
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -24,22 +23,33 @@ __license__ = "MIT License"
 
 
 @dataclass(frozen=True, slots=True)
-class Cashflow:
-    balance: float
+class Metrics: pass
 
-    @property
-    def revenue(self): return + max(0.0, self.balance)
-    @property
-    def expense(self): return - min(0.0, self.balance)
+@dataclass(frozen=True, slots=True)
+class Priority: pass
 
 
 class Divestiture(Prospect):
     @property
     def commissions(self): return self.costing.commissions * self.quantities.sum()
     @property
-    def slippage(self): return max(self.liquidate - self.market, 0)
+    def slippage(self): return max(self.liquidate - self.market, self.slippage.exit * self.gap)
     @property
     def intent(self): return Intent.CLOSE
+
+    @property
+    def forecasted(self): return (self.past.revenue + self.future.revenue) / (self.past.expense + self.future.expense + self.cost + self.fees) - 1
+    @property
+    def realized(self): return (self.past.revenue + self.spot.revenue) / (self.past.expense + self.spot.expense + self.cost + self.fees) - 1
+    @property
+    def marginal(self): return (self.spot.revenue + self.future.revenue) / (self.spot.expense + self.future.expense + self.cost + self.fees) - 1
+    @property
+    def available(self): return self.forecasted - self.realized
+
+    @cached_property
+    def entry(self): return (self.securities["entry"] * self.positions.map(int) * self.quantities).sum()
+    @cached_property
+    def fees(self): return (self.costing.commissions * self.quantities).sum()
 
     @cached_property
     def liquidate(self):
@@ -48,26 +58,12 @@ class Divestiture(Prospect):
         buying = (self.securities["ask"] * ((positions - 1) / 2) * self.quantities).sum()
         return selling - buying
 
-    @property
-    def forecasted(self): return (self.past.revenue + self.future.revenue) / (self.past.expense + self.future.expense + self.cost) - 1
-    @property
-    def realized(self): return (self.past.revenue + self.spot.revenue) / (self.past.expense + self.spot.expense + self.cost) - 1
-    @property
-    def marginal(self): return (self.spot.revenue + self.future.revenue) / (self.spot.expense + self.future.expense + self.cost) - 1
-    @property
-    def available(self): return self.forecasted - self.realized
-
     @cached_property
-    def past(self): return Cashflow(self.proceeds - self.payments)
+    def future(self): return self.cashflow(self.forecast, action=Action.SELL)
     @cached_property
-    def spot(self): return Cashflow(self.market)
+    def spot(self): return self.cashflow(self.market, action=Action.SELL)
     @cached_property
-    def future(self): return Cashflow(self.forecast)
-
-    @property
-    def proceeds(self): return self.securities["proceeds"].sum()
-    @property
-    def payments(self): return self.securities["payments"].sum()
+    def past(self): return self.cashflow(self.entry, action=Action.BUY)
 
 
 class DivestitureCreators(object):

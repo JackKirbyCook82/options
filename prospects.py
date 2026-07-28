@@ -6,6 +6,7 @@ Created on Sat May 16 2026
 
 """
 
+import math
 import pandas as pd
 from typing import Optional
 from dataclasses import dataclass
@@ -20,7 +21,7 @@ from support.custom import DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ProspectCalculator", "Prospect", "Costing", "Slippage", "Scenario"]
+__all__ = ["ProspectCalculator", "Prospect", "Costing", "Slippage"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -29,7 +30,7 @@ __license__ = "MIT License"
 class Slippage: entry: float = 0.25; exit: float = 0.35
 
 @dataclass(frozen=True, slots=True)
-class Costing: slippage: Slippage | float; commissions: float = 0.65
+class Costing: slippage: Slippage | float; commissions: float = 0.65 / 100
 
 @dataclass(frozen=True, slots=True)
 class Greeks: delta: float; gamma: float; theta: float; vega: float
@@ -45,20 +46,19 @@ class Scenario:
 
 
 class Prospect(ABC):
-    def __init__(self, spread, securities, /, costing, scenarios):
-        assert isinstance(scenarios, list) and all([isinstance(scenario, Scenario) for scenario in scenarios])
-        assert isinstance(costing, Costing)
+    def __init__(self, spread, securities, /, costing):
         assert isinstance(securities, pd.DataFrame)
+        assert isinstance(costing, Costing)
         assert len(securities["ticker"].unique()) == 1
         assert len(securities["underlying"].unique()) == 1
         assert len(securities["volatility"].unique()) == 1
         assert spread in list(Spread)
+        self.__scenario = Scenario(cdays=1, tdays=1, vpts=1, sigmas=1)
         self.__ticker = securities["ticker"].unique()[0]
         self.__expires = DateRange(securities["expire"].to_list())
         self.__underlying = securities["underlying"].unique()[0]
         self.__volatility = securities["volatility"].unique()[0]
         self.__securities = securities
-        self.__scenarios = scenarios
         self.__costing = costing
         self.__spread = spread
 
@@ -76,10 +76,14 @@ class Prospect(ABC):
             return far - near
         else: raise ValueError(self.spread)
 
-    @property
-    def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
-    @property
-    def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
+    @cached_property
+    def ratios(self):
+        shock = self.scenario.sigmas * self.underlying * self.volatility * math.sqrt(self.scenario.tdays / 252) / abs(self.edge)
+        delta = self.greeks.delta * (shock ** 1) / 1 / abs(self.edge)
+        gamma = self.greeks.gamma * (shock ** 2) / 2 / abs(self.edge)
+        theta = self.greeks.theta * self.scenario.cdays / 365 / abs(self.edge)
+        vega = self.greeks.vega * self.scenario.vpts / 100 / abs(self.edge)
+        return Greeks(delta=delta, gamma=gamma, theta=theta, vega=vega)
 
     @cached_property
     def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
@@ -92,6 +96,11 @@ class Prospect(ABC):
     def edge(self): return (self.forecast - self.market) * int(self.position)
     @cached_property
     def cost(self): return self.commissions + self.slippage
+
+    @property
+    def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
+    @property
+    def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
@@ -131,6 +140,13 @@ class Prospect(ABC):
     @abstractmethod
     def intent(self): pass
 
+    @staticmethod
+    def cashflow(amount, action):
+        cashflow = amount * int(action)
+        revenue = + max(0.0, cashflow)
+        expense = - min(0.0, cashflow)
+        return SimpleNamespace(revenue=revenue, expense=expense)
+
     @property
     def securities(self): return self.__securities
     @property
@@ -138,7 +154,7 @@ class Prospect(ABC):
     @property
     def volatility(self): return self.__volatility
     @property
-    def scenarios(self): return self.__scenarios
+    def scenario(self): return self.__scenario
     @property
     def costing(self): return self.__costing
     @property
