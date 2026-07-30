@@ -30,7 +30,7 @@ class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", 
     activity = lambda supply, demand: np.minimum(supply, demand) / (np.maximum(supply, demand) + 10)
     tightness = lambda gap, median: gap / median
     mean = lambda bid, ask, supply, demand: ((bid * demand) + (ask * supply)) / (demand + supply)
-    median = lambda bid, ask: (bid + ask) / 2
+    market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
     def __call__(self, options, **kwargs):

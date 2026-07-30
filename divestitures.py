@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 
 from options.prospects import Prospect
-from finance.enumerations import Spread, Position, Intent, Action
+from finance.enumerations import Spread, Position, Intent
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
@@ -28,42 +28,29 @@ class Metrics: pass
 @dataclass(frozen=True, slots=True)
 class Priority: pass
 
+@dataclass(frozen=True, slots=True)
+class PnL: forecasted: float; realizable: float; opportunity: float
+
 
 class Divestiture(Prospect):
     @property
-    def commissions(self): return self.costing.commissions * self.quantities.sum()
+    def slippage(self): return max(self.premium, self.costing.slippage.exit * self.gap)
     @property
-    def slippage(self): return max(self.liquidate - self.market, self.slippage.exit * self.gap)
+    def commissions(self): return self.costing.commissions * self.quantities.sum()
     @property
     def intent(self): return Intent.CLOSE
 
-    @property
-    def forecasted(self): return (self.past.revenue + self.future.revenue) / (self.past.expense + self.future.expense + self.cost + self.fees) - 1
-    @property
-    def realized(self): return (self.past.revenue + self.spot.revenue) / (self.past.expense + self.spot.expense + self.cost + self.fees) - 1
-    @property
-    def marginal(self): return (self.spot.revenue + self.future.revenue) / (self.spot.expense + self.future.expense + self.cost + self.fees) - 1
-    @property
-    def available(self): return self.forecasted - self.realized
-
     @cached_property
     def entry(self): return (self.securities["entry"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def fees(self): return (self.costing.commissions * self.quantities).sum()
+    @property
+    def fees(self): return self.costing.commissions * self.quantities.sum()
 
-    @cached_property
-    def liquidate(self):
-        positions = self.positions.map(int)
-        selling = (self.securities["bid"] * ((positions + 1) / 2) * self.quantities).sum()
-        buying = (self.securities["ask"] * ((positions - 1) / 2) * self.quantities).sum()
-        return selling - buying
-
-    @cached_property
-    def future(self): return self.cashflow(self.forecast, action=Action.SELL)
-    @cached_property
-    def spot(self): return self.cashflow(self.market, action=Action.SELL)
-    @cached_property
-    def past(self): return self.cashflow(self.entry, action=Action.BUY)
+    @property
+    def pnl(self):
+        forecasted = self.forecast - self.entry - self.cost - self.fees
+        realizable = self.market - self.entry - self.cost - self.fees
+        opportunity = forecasted - realizable
+        return PnL(forecasted=forecasted, realizable=realizable, opportunity=opportunity)
 
 
 class DivestitureCreators(object):
@@ -74,6 +61,10 @@ class DivestitureCreators(object):
 
 
 class DivestitureCreator(ABC, metaclass=RegistryMeta):
+    def __init__(self, *args, scenario, costing, **kwargs):
+        self.__scenario = scenario
+        self.__costing = costing
+
     def __call__(self, holdings, /, **kwargs):
         assert isinstance(holdings, pd.DataFrame)
         for order, holding in holdings.groupby("order"):
@@ -89,6 +80,11 @@ class DivestitureCreator(ABC, metaclass=RegistryMeta):
     @abstractmethod
     def creator(holding): pass
 
+    @property
+    def scenario(self): return self.__scenario
+    @property
+    def costing(self): return self.__costing
+
 
 class FlyDivestitureCreator(DivestitureCreator, register=Spread.FLY):
     def validator(self, holding):
@@ -99,18 +95,18 @@ class FlyDivestitureCreator(DivestitureCreator, register=Spread.FLY):
         if holding["strike"].nunique(dropna=False) != 3: return False
         holding = holding.sort_values("strike")
         positions = holding["position"].map(int).to_numpy()
-        quantities = holding["quantity"].astype(float).to_numpy()
-        if positions * quantities != 0: return False
-        if Position.EMPTY in positions: return False
-        if positions[0] != positions[2]: return False
-        if positions[0] == positions[1]: return False
-        if positions[1] == positions[2]: return False
+        quantities = holding["quantity"].astype(int).to_numpy()
+        if (positions == int(Position.EMPTY)).any(): return False
+        if (quantities <= 0).any(): return False
+        if not (positions[0] == positions[2] and positions[1] == positions[0] * -1): return False
+        if not (quantities[0] == quantities[2] and quantities[1] == quantities[0] * +2): return False
         return True
 
     def creator(self, holding):
         securities = holding.sort_values("strike").reset_index(drop=True).copy()
         securities["spread"] = Spread.FLY
-        prospect = Divestiture(Spread.FLY, securities)
+        parameters = dict(scenario=self.scenario, costing=self.costing)
+        prospect = Divestiture(Spread.FLY, securities, **parameters)
         return prospect
 
 
@@ -124,15 +120,15 @@ class CalendarDivestitureCreator(DivestitureCreator, register=Spread.CALENDAR):
         holding = holding.sort_values("expire")
         positions = holding["position"].map(int).to_numpy()
         quantities = holding["quantity"].astype(float).to_numpy()
-        if positions * quantities != 0: return False
-        if Position.EMPTY in positions: return False
-        if positions[0] != positions[1]: return False
+        if positions[0] != positions[1] * -1: return False
+        if quantities[0] != quantities[1] * +1: return False
         return True
 
     def creator(self, holding):
         securities = (holding.sort_values("expire").reset_index(drop=True).copy())
         securities["spread"] = Spread.CALENDAR
-        prospect = Divestiture(Spread.CALENDAR, securities)
+        parameters = dict(scenario=self.scenario, costing=self.costing)
+        prospect = Divestiture(Spread.CALENDAR, securities, **parameters)
         return prospect
 
 

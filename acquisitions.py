@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 
 from options.prospects import Prospect
-from finance.enumerations import Spread, Instrument, Option, Position, Intent, Action
+from finance.enumerations import Spread, Instrument, Option, Position, Intent
 from finance.specifications import Securities
 from support.meta import RegistryMeta
 
@@ -29,24 +29,22 @@ class Metrics: pass
 @dataclass(frozen=True, slots=True)
 class Priority: pass
 
+@dataclass(frozen=True, slots=True)
+class PnL: forecasted: float
+
 
 class Acquisition(Prospect):
     @property
-    def commissions(self): return self.costing.commissions * self.quantities.sum() * 2
-    @property
     def slippage(self): return (self.costing.slippage.entry + self.costing.slippage.exit) * self.gap
+    @property
+    def commissions(self): return self.costing.commissions * self.quantities.sum() * 2
     @property
     def intent(self): return Intent.OPEN
 
-    @property
-    def forecasted(self): return (self.spot.revenue + self.future.revenue) / (self.spot.expense + self.future.expense + self.cost) - 1
-    @property
+    @cached_property
+    def pnl(self): return PnL(forecasted=self.forecast - self.market - self.cost)
+    @cached_property
     def multiple(self): return self.edge / self.cost
-
-    @cached_property
-    def future(self): return self.cashflow(self.forecast, action=Action.SELL)
-    @cached_property
-    def spot(self): return self.cashflow(self.market, action=Action.BUY)
 
 
 class AcquisitionCreators(object):
@@ -57,8 +55,10 @@ class AcquisitionCreators(object):
 
 
 class AcquisitionCreator(ABC, metaclass=RegistryMeta):
-    def __init__(self, *args, limit=1, **kwargs):
+    def __init__(self, *args, costing, scenario, limit=1, **kwargs):
         assert isinstance(limit, int) and limit > 0
+        self.__scenario = scenario
+        self.__costing = costing
         self.__limit = limit
 
     def __call__(self, options, /, **kwargs):
@@ -92,6 +92,10 @@ class AcquisitionCreator(ABC, metaclass=RegistryMeta):
     def creator(self, security, securities): pass
 
     @property
+    def scenario(self): return self.__scenario
+    @property
+    def costing(self): return self.__costing
+    @property
     def limit(self): return self.__limit
 
 
@@ -114,7 +118,8 @@ class FlyAcquisitionCreator(AcquisitionCreator, register=Spread.FLY):
         securities["spread"] = Spread.FLY
         securities["position"] = [hedge, position, hedge]
         securities["quantity"] = [1, 2, 1]
-        prospect = Acquisition(Spread.FLY, securities)
+        parameters = dict(scenario=self.scenario, costing=self.costing)
+        prospect = Acquisition(Spread.FLY, securities, **parameters)
         return prospect
 
 
@@ -137,7 +142,8 @@ class CalendarAcquisitionCreator(AcquisitionCreator, register=Spread.CALENDAR):
         securities["spread"] = Spread.CALENDAR
         securities["position"] = [hedge, position]
         securities["quantity"] = [1, 1]
-        prospect = Acquisition(Spread.CALENDAR, securities)
+        parameters = dict(scenario=self.scenario, costing=self.costing)
+        prospect = Acquisition(Spread.CALENDAR, securities, **parameters)
         return prospect
 
 

@@ -98,17 +98,17 @@ class ForwardCalculator(Logging):
 
     @staticmethod
     def samples(options, /, **kwargs):
-        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["median", "gap", "supply", "demand"], sort=False).sort_index()
+        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["market", "gap", "supply", "demand"], sort=False).sort_index()
         if set(Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
-        validity = [samples[index].notna() for index in list(product(["median", "gap"], list(Option)))]
+        validity = [samples[index].notna() for index in list(product(["market", "gap"], list(Option)))]
         samples = samples[np.logical_and.reduce(validity)]
-        difference = (samples["median", Option.CALL] - samples["median", Option.PUT]).rename("difference")
+        difference = (samples["market", Option.CALL] - samples["market", Option.PUT]).rename("difference")
         supply = (samples["supply", Option.CALL] + samples["supply", Option.PUT]).rename("supply")
         demand = (samples["demand", Option.CALL] + samples["demand", Option.PUT]).rename("demand")
-        median = (samples["median", Option.CALL] + samples["median", Option.PUT]).rename("median")
+        market = (samples["market", Option.CALL] + samples["market", Option.PUT]).rename("market")
         gap = (samples["gap", Option.CALL] + samples["gap", Option.PUT]).rename("gap")
         strike = samples.index.get_level_values("strike").to_series(index=samples.index)
-        samples = pd.concat([strike, difference, median, gap, supply, demand], axis=1)
+        samples = pd.concat([strike, difference, market, gap, supply, demand], axis=1)
         samples = samples.reset_index(drop=True, inplace=False)
         return samples
 
