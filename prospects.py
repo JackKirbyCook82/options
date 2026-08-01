@@ -6,7 +6,6 @@ Created on Sat May 16 2026
 
 """
 
-import math
 import pandas as pd
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -35,31 +34,26 @@ class Costing: slippage: Slippage; commissions: float = 0.65 / 100
 class Greeks: delta: float; gamma: float; theta: float; vega: float
 
 @dataclass(frozen=True, slots=True)
-class Scenario: cdays: int; tdays: int; vpts: float; sigmas: float
+class Scenario: cdays: int; tdays: int; vpts: int; zscore: float
 
 @dataclass(frozen=True, slots=True)
-class Risk:
-    greeks: Greeks; scenario: Scenario; underlying: float; volatility: float; edge: float
+class Risk: greeks: Greeks; underlying: float; volatility: float
 
-    @cached_property
-    def shock(self): return self.scenario.sigmas * self.underlying * self.volatility * math.sqrt(self.scenario.tdays / 252)
-    @cached_property
-    def edge(self): return min(abs(self.edge), 1e-12)
-
-    @property
-    def delta(self): return self.greeks.delta * self.shock / self.edge
-    @property
-    def gamma(self): return 0.5 * self.greeks.gamma * (self.shock ** 2) / self.edge
-    @property
-    def theta(self): return self.greeks.theta * (self.scenario.cdays / 365) / self.edge
-    @property
-    def vega(self): return self.greeks.vega * (self.scenario.vpts / 100) / self.edge
+#    @cached_property
+#    def shock(self): return self.scenario.zscore * self.underlying * self.volatility * math.sqrt(self.scenario.tdays / 252)
+#    @property
+#    def delta(self): return self.greeks.delta * self.shock
+#    @property
+#    def gamma(self): return 0.5 * self.greeks.gamma * (self.shock ** 2)
+#    @property
+#    def theta(self): return self.greeks.theta * (self.scenario.cdays / 365)
+#    @property
+#    def vega(self): return self.greeks.vega * (self.scenario.vpts / 100)
 
 
 class Prospect(ABC):
-    def __init__(self, spread, securities, /, scenario, costing):
+    def __init__(self, spread, securities, /, costing):
         assert isinstance(securities, pd.DataFrame)
-        assert isinstance(scenario, Scenario)
         assert isinstance(costing, Costing)
         assert len(securities["ticker"].unique()) == 1
         assert len(securities["underlying"].unique()) == 1
@@ -70,13 +64,19 @@ class Prospect(ABC):
         self.__underlying = securities["underlying"].unique()[0]
         self.__volatility = securities["volatility"].unique()[0]
         self.__securities = securities
-        self.__scenario = scenario
         self.__costing = costing
         self.__spread = spread
 
     def __iter__(self):
         for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
+
+#    @staticmethod
+#    def scenarios(*args, days=1, **kwargs):
+#        for zscore, vpts in product(kwargs.get("zscore", range(-1, 2)), kwargs.get("vpts", range(-1, 2))):
+#            parameters = dict(tdays=days, cdays=days, vpts=vpts, zscore=zscore)
+#            scenario = Scenario(**parameters)
+#            yield scenario
 
     @cached_property
     def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
@@ -108,15 +108,17 @@ class Prospect(ABC):
         elif self.spread is Spread.FLY: return self.zscore / (self.quantities.sum() / 2)
         else: raise ValueError(self.spread)
 
-    @cached_property
+    @property
     def position(self): return Position((self.edge > 0) - (self.edge < 0))
-    @cached_property
+    @property
     def cost(self): return self.commissions + self.slippage
-    @cached_property
+    @property
     def edge(self): return self.forecast - self.market
+    @property
+    def multiple(self): return self.edge / self.cost
 
     @property
-    def risk(self): return Risk(greeks=self.greeks, scenario=self.scenario, underlying=self.underlying, volatility=self.volatility, edge=self.edge)
+    def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
     @property
     def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
 
@@ -145,8 +147,6 @@ class Prospect(ABC):
     def underlying(self): return self.__underlying
     @property
     def volatility(self): return self.__volatility
-    @property
-    def scenario(self): return self.__scenario
     @property
     def costing(self): return self.__costing
     @property

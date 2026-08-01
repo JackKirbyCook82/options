@@ -43,8 +43,6 @@ class Acquisition(Prospect):
 
     @cached_property
     def pnl(self): return PnL(forecasted=self.forecast - self.market - self.cost)
-    @cached_property
-    def multiple(self): return self.edge / self.cost
 
 
 class AcquisitionCreators(object):

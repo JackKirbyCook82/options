@@ -42,10 +42,10 @@ class Divestiture(Prospect):
 
     @cached_property
     def entry(self): return (self.securities["entry"] * self.positions.map(int) * self.quantities).sum()
-    @property
+    @cached_property
     def fees(self): return self.costing.commissions * self.quantities.sum()
 
-    @property
+    @cached_property
     def pnl(self):
         forecasted = self.forecast - self.entry - self.cost - self.fees
         realizable = self.market - self.entry - self.cost - self.fees
