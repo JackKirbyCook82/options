@@ -17,40 +17,65 @@ from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["DivestitureCreators"]
+__all__ = ["DivestitureCreators", "Metrics"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-@dataclass(frozen=True, slots=True)
-class Metrics: pass
+# @dataclass(frozen=True, slots=True)
+# class PnL: forecasted: float; realizable: float; opportunity: float
+
+# @dataclass(frozen=True, slots=True)
+# class Edge: original: float; captured: float; remaining: float
+
 
 @dataclass(frozen=True, slots=True)
-class Priority: pass
+class Metrics:
+    def __post_init__(self):
+        pass
+
+    def __call__(self, divestiture):
+        pass
+
 
 @dataclass(frozen=True, slots=True)
-class PnL: forecasted: float; realizable: float; opportunity: float
+class Priority:
+    def __lt__(self, other): return
+    def __float__(self): return
 
 
 class Divestiture(Prospect):
     @property
-    def slippage(self): return max(self.premium, self.costing.slippage.exit * self.gap)
+    def position(self): return Position((self.forecast > self.entry) - (self.entry > self.forecast))
+    @property
+    def slippage(self): return max(self.liquidate, self.costing.slippage.exit * self.gap)
     @property
     def commissions(self): return self.costing.commissions * self.quantities.sum()
     @property
     def intent(self): return Intent.CLOSE
 
     @cached_property
+    def priority(self): pass
+
+    @cached_property
     def entry(self): return (self.securities["entry"] * self.positions.map(int) * self.quantities).sum()
     @cached_property
     def fees(self): return self.costing.commissions * self.quantities.sum()
 
-    @cached_property
-    def pnl(self):
-        forecasted = self.forecast - self.entry - self.cost - self.fees
-        realizable = self.market - self.entry - self.cost - self.fees
-        opportunity = forecasted - realizable
-        return PnL(forecasted=forecasted, realizable=realizable, opportunity=opportunity)
+
+#    @cached_property
+#    def pnl(self):
+#        forecasted = self.forecast - self.entry - self.cost - self.fees
+#        realizable = self.market - self.entry - self.cost - self.fees
+#        opportunity = forecasted - realizable
+#        return PnL(forecasted=forecasted, realizable=realizable, opportunity=opportunity)
+
+#    @cached_property
+#    def edge(self):
+#        original = self.forecast - self.entry
+#        captured = self.market - self.entry
+#        remaining = self.forecast - self.market
+#        return Edge(original=original, captured=captured, remaining=remaining)
 
 
 class DivestitureCreators(object):
@@ -61,8 +86,7 @@ class DivestitureCreators(object):
 
 
 class DivestitureCreator(ABC, metaclass=RegistryMeta):
-    def __init__(self, *args, scenario, costing, **kwargs):
-        self.__scenario = scenario
+    def __init__(self, *args, costing, **kwargs):
         self.__costing = costing
 
     def __call__(self, holdings, /, **kwargs):
@@ -80,8 +104,6 @@ class DivestitureCreator(ABC, metaclass=RegistryMeta):
     @abstractmethod
     def creator(holding): pass
 
-    @property
-    def scenario(self): return self.__scenario
     @property
     def costing(self): return self.__costing
 
@@ -105,7 +127,7 @@ class FlyDivestitureCreator(DivestitureCreator, register=Spread.FLY):
     def creator(self, holding):
         securities = holding.sort_values("strike").reset_index(drop=True).copy()
         securities["spread"] = Spread.FLY
-        parameters = dict(scenario=self.scenario, costing=self.costing)
+        parameters = dict(costing=self.costing)
         prospect = Divestiture(Spread.FLY, securities, **parameters)
         return prospect
 
@@ -127,7 +149,7 @@ class CalendarDivestitureCreator(DivestitureCreator, register=Spread.CALENDAR):
     def creator(self, holding):
         securities = (holding.sort_values("expire").reset_index(drop=True).copy())
         securities["spread"] = Spread.CALENDAR
-        parameters = dict(scenario=self.scenario, costing=self.costing)
+        parameters = dict(costing=self.costing)
         prospect = Divestiture(Spread.CALENDAR, securities, **parameters)
         return prospect
 

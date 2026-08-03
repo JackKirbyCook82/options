@@ -6,6 +6,7 @@ Created on Sat May 16 2026
 
 """
 
+import math
 import pandas as pd
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -14,12 +15,12 @@ from functools import cached_property
 
 from finance.osi import OSI
 from finance.logging import Logging
-from finance.enumerations import Spread, Instrument, Position, Action
+from finance.enumerations import Spread, Instrument, Action
 from support.custom import DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ProspectCalculator", "Prospect", "Costing", "Slippage"]
+__all__ = ["ProspectCalculator", "Prospect", "Scenario", "Costing", "Slippage"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -31,24 +32,28 @@ class Slippage: entry: float = 0.25; exit: float = 0.35
 class Costing: slippage: Slippage; commissions: float = 0.65 / 100
 
 @dataclass(frozen=True, slots=True)
+class Scenario: zscore: float; cdays: int; tdays: int; vpts: int
+
+@dataclass(frozen=True, slots=True)
 class Greeks: delta: float; gamma: float; theta: float; vega: float
 
 @dataclass(frozen=True, slots=True)
-class Scenario: cdays: int; tdays: int; vpts: int; zscore: float
+class Risk:
+    greeks: Greeks; underlying: float; volatility: float
 
-@dataclass(frozen=True, slots=True)
-class Risk: greeks: Greeks; underlying: float; volatility: float
+    def __call__(self, scenario):
+        shock = self.shock(scenario.zscore, scenario.tdays)
+        delta = self.delta(shock)
+        gamma = self.gamma(shock)
+        theta = self.theta(scenario.cdays)
+        vega = self.vega(scenario.vpts)
+        return delta + gamma + theta + vega
 
-#    @cached_property
-#    def shock(self): return self.scenario.zscore * self.underlying * self.volatility * math.sqrt(self.scenario.tdays / 252)
-#    @property
-#    def delta(self): return self.greeks.delta * self.shock
-#    @property
-#    def gamma(self): return 0.5 * self.greeks.gamma * (self.shock ** 2)
-#    @property
-#    def theta(self): return self.greeks.theta * (self.scenario.cdays / 365)
-#    @property
-#    def vega(self): return self.greeks.vega * (self.scenario.vpts / 100)
+    def shock(self, zscore, tdays): return zscore * self.underlying * self.volatility * math.sqrt(tdays / 252)
+    def delta(self, shock): return self.greeks.delta * (shock ** 1) / 1
+    def gamma(self, shock): return self.greeks.gamma * (shock ** 2) / 2
+    def theta(self, cdays): return self.greeks.theta * (cdays / 365)
+    def vega(self, vpts): return self.greeks.vega * (vpts / 100)
 
 
 class Prospect(ABC):
@@ -71,13 +76,6 @@ class Prospect(ABC):
         for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
 
-#    @staticmethod
-#    def scenarios(*args, days=1, **kwargs):
-#        for zscore, vpts in product(kwargs.get("zscore", range(-1, 2)), kwargs.get("vpts", range(-1, 2))):
-#            parameters = dict(tdays=days, cdays=days, vpts=vpts, zscore=zscore)
-#            scenario = Scenario(**parameters)
-#            yield scenario
-
     @cached_property
     def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
     @cached_property
@@ -94,7 +92,7 @@ class Prospect(ABC):
     def vega(self): return (self.securities["vega"] * self.positions.map(int) * self.quantities).sum()
 
     @cached_property
-    def premium(self):
+    def liquidate(self):
         positions = self.positions.map(int).astype(int)
         quantities = self.quantities.astype(float)
         actions = positions * int(self.intent)
@@ -109,18 +107,11 @@ class Prospect(ABC):
         else: raise ValueError(self.spread)
 
     @property
-    def position(self): return Position((self.edge > 0) - (self.edge < 0))
-    @property
-    def cost(self): return self.commissions + self.slippage
-    @property
-    def edge(self): return self.forecast - self.market
-    @property
-    def multiple(self): return self.edge / self.cost
-
-    @property
     def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
     @property
     def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
+    @property
+    def cost(self): return self.commissions + self.slippage
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
@@ -158,20 +149,25 @@ class Prospect(ABC):
 
     @property
     @abstractmethod
+    def priority(self): pass
+    @property
+    @abstractmethod
     def commissions(self): pass
     @property
     @abstractmethod
     def slippage(self): pass
     @property
     @abstractmethod
+    def position(self): pass
+    @property
+    @abstractmethod
     def intent(self): pass
 
 
 class ProspectCalculator(Logging):
-    def __init__(self, *args, creators, metrics, priority, **kwargs):
+    def __init__(self, *args, creators, metrics, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = creators
-        self.__priority = priority
         self.__metrics = metrics
 
     def __call__(self, holdings, /, **kwargs):
@@ -184,8 +180,7 @@ class ProspectCalculator(Logging):
         assert isinstance(holdings, pd.DataFrame)
         prospects = self.calculator(holdings, **kwargs)
         prospects = list(prospects)
-        priorities = [self.priority(prospect) for prospect in prospects].__getitem__
-        prospects = (prospects[index] for index in sorted(range(len(prospects)), key=priorities, reverse=True))
+        prospects = sorted(prospects, reverse=True)
         return prospects
 
     def calculator(self, holdings, /, **kwargs):
@@ -197,8 +192,6 @@ class ProspectCalculator(Logging):
 
     @property
     def creators(self): return self.__creators
-    @property
-    def priority(self): return self.__priority
     @property
     def metrics(self): return self.__metrics
 
