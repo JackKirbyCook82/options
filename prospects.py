@@ -149,25 +149,20 @@ class Prospect(ABC):
 
     @property
     @abstractmethod
-    def priority(self): pass
-    @property
-    @abstractmethod
     def commissions(self): pass
     @property
     @abstractmethod
     def slippage(self): pass
     @property
     @abstractmethod
-    def position(self): pass
-    @property
-    @abstractmethod
     def intent(self): pass
 
 
 class ProspectCalculator(Logging):
-    def __init__(self, *args, creators, metrics, **kwargs):
+    def __init__(self, *args, creators, metrics, priority, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = creators
+        self.__priority = priority
         self.__metrics = metrics
 
     def __call__(self, holdings, /, **kwargs):
@@ -180,7 +175,7 @@ class ProspectCalculator(Logging):
         assert isinstance(holdings, pd.DataFrame)
         prospects = self.calculator(holdings, **kwargs)
         prospects = list(prospects)
-        prospects = sorted(prospects, reverse=True)
+        prospects = sorted(prospects, key=self.priority, reverse=True)
         return prospects
 
     def calculator(self, holdings, /, **kwargs):
@@ -192,6 +187,8 @@ class ProspectCalculator(Logging):
 
     @property
     def creators(self): return self.__creators
+    @property
+    def priority(self): return self.__priority
     @property
     def metrics(self): return self.__metrics
 

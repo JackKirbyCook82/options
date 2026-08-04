@@ -6,10 +6,12 @@ Created on Mon Jul 6 2026
 
 """
 
+import math
 import pandas as pd
-from dataclasses import dataclass
+from itertools import product
 from abc import ABC, abstractmethod
-from functools import cached_property, total_ordering
+from functools import cached_property
+from dataclasses import dataclass, field, astuple
 
 from options.prospects import Prospect, Scenario
 from finance.enumerations import Spread, Instrument, Option, Position, Intent
@@ -18,46 +20,43 @@ from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["AcquisitionCreators", "Metrics"]
+__all__ = ["AcquisitionCreators", "Metrics", "Weights", "Targets", "Priority"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
 @dataclass(frozen=True, slots=True)
-class Metrics:
-    zspread: float = 2.0; multiple: float = 2.0; ratio: float = 10.0
-    edge: float = 0.0; pnl: float = 0.0
-
+class Measures: zspread: float; multiple: float; ratio: float
+class Weights(Measures): pass
+class Targets(Measures): pass
+class Metrics(Measures):
     def __post_init__(self):
-        assert self.multiple >= 0.0
-        assert self.zspread >= 0.0
-        assert self.ratio >= 0.0
-        assert self.edge >= 0.0
-        assert self.pnl >= 0.0
+        assert self.zspread > 0
+        assert self.multiple > 0
+        assert self.ratio > 0
 
     def __call__(self, acquisition):
         assert isinstance(acquisition, Acquisition)
-        if abs(acquisition.zspread) <= self.zspread: return False
+        if acquisition.zspread <= self.zspread: return False
         if acquisition.multiple <= self.multiple: return False
         if acquisition.ratio <= self.ratio: return False
-        if acquisition.edge <= self.edge: return False
-        if acquisition.pnl <= self.pnl: return False
         return True
 
 
-@total_ordering
 @dataclass(frozen=True, slots=True)
 class Priority:
-    zspread: float; multiple: float; ratio: float
-    edge: float; pnl: float
+    targets: Measures = field(default_factory=lambda: Measures(zspread=3.0, multiple=4.0, ratio=20.0))
+    weights: Measures = field(default_factory=lambda: Measures(zspread=0.20, multiple=0.30, ratio=0.35))
 
-    def __lt__(self, other): return
-    def __float__(self): return
+    def __call__(self, acquisition):
+        assert isinstance(acquisition, Acquisition)
+        values = Measures(zspread=acquisition.zspread, multiple=acquisition.multiple, ratio=acquisition.ratio)
+        generator = zip(astuple(values), astuple(self.targets), astuple(self.weights))
+        function = lambda value, target, weight: weight * math.log(max(value / (value + target), 1e-12))
+        return math.exp(sum([function(*arguments) for arguments in generator]))
 
 
 class Acquisition(Prospect):
-    @property
-    def position(self): return Position((self.forecast > self.market) - (self.market > self.forecast))
     @property
     def slippage(self): return (self.costing.slippage.entry + self.costing.slippage.exit) * self.gap
     @property
@@ -66,28 +65,21 @@ class Acquisition(Prospect):
     def intent(self): return Intent.OPEN
 
     @cached_property
-    def priority(self):
-        parameters = dict(zspread=self.zspread, multiple=self.multiple, ratio=self.ratio, edge=self.edge, pnl=self.pnl)
-        return Priority(**parameters)
-
-    @cached_property
     def multiple(self): return self.edge / self.cost
     @cached_property
-    def ratio(self): return self.pnl / self.var
+    def ratio(self): return self.gain / self.loss
 
     @cached_property
-    def edge(self): return (self.forecast - self.market) * int(self.position)
+    def edge(self): return self.forecast - self.market
     @cached_property
-    def pnl(self): return self.edge - self.cost
+    def gain(self): return self.edge - self.cost
 
     @cached_property
-    def var(self):
-        zscore = vpts = -int(self.position)
-        scenario = Scenario(zscore=zscore, vpts=vpts, tdays=1, cdays=1)
-        risk = self.risk(scenario)
-        positions = {Position.LONG: min, Position.SHORT: max}
-        try: return positions[self.position](1e-12, risk) * int(self.position)
-        except KeyError: return 1e-12
+    def loss(self):
+        generator = product(range(-1, 2), range(-1, 2))
+        scenarios = (Scenario(zscore=zscore, vpts=vpts, tdays=1, cdays=1) for zscore, vpts in generator)
+        worse = min([self.risk(scenario) for scenario in scenarios]) - self.cost
+        return max(self.cost, - worse)
 
 
 class AcquisitionCreators(object):
@@ -153,10 +145,9 @@ class FlyAcquisitionCreator(AcquisitionCreator, register=Spread.FLY):
                 yield [index, index + section, index + section * 2]
 
     def creator(self, security, securities):
-        position = security.position
-        hedge = Position(-int(position))
+        body, wing = security.position, Position(-int(security.position))
         securities["spread"] = Spread.FLY
-        securities["position"] = [hedge, position, hedge]
+        securities["position"] = [wing, body, wing]
         securities["quantity"] = [1, 2, 1]
         parameters = dict(costing=self.costing)
         prospect = Acquisition(Spread.FLY, securities, **parameters)
@@ -177,10 +168,9 @@ class CalendarAcquisitionCreator(AcquisitionCreator, register=Spread.CALENDAR):
                 yield [index, index + section]
 
     def creator(self, security, securities):
-        position = security.position
-        hedge = Position(-int(position))
+        far, near = security.position, Position(-int(security.position))
         securities["spread"] = Spread.CALENDAR
-        securities["position"] = [hedge, position]
+        securities["position"] = [near, far]
         securities["quantity"] = [1, 1]
         parameters = dict(costing=self.costing)
         prospect = Acquisition(Spread.CALENDAR, securities, **parameters)

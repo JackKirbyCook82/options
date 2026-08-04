@@ -7,9 +7,9 @@ Created on Mon Jul 6 2026
 """
 
 import pandas as pd
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from functools import cached_property
+from dataclasses import dataclass, field, astuple
 
 from options.prospects import Prospect
 from finance.enumerations import Spread, Position, Intent
@@ -17,20 +17,16 @@ from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["DivestitureCreators", "Metrics"]
+__all__ = ["DivestitureCreators", "Metrics", "Weights", "Targets", "Priority"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-# @dataclass(frozen=True, slots=True)
-# class PnL: forecasted: float; realizable: float; opportunity: float
-
-# @dataclass(frozen=True, slots=True)
-# class Edge: original: float; captured: float; remaining: float
-
-
 @dataclass(frozen=True, slots=True)
-class Metrics:
+class Measures: pass
+class Weights(Measures): pass
+class Targets(Measures): pass
+class Metrics(Measures):
     def __post_init__(self):
         pass
 
@@ -40,22 +36,20 @@ class Metrics:
 
 @dataclass(frozen=True, slots=True)
 class Priority:
-    def __lt__(self, other): return
-    def __float__(self): return
+    targets: Measures = field(default_factory=lambda: Measures())
+    weights: Measures = field(default_factory=lambda: Measures())
+
+    def __call__(self, divestiture):
+        pass
 
 
 class Divestiture(Prospect):
-    @property
-    def position(self): return Position((self.forecast > self.entry) - (self.entry > self.forecast))
     @property
     def slippage(self): return max(self.liquidate, self.costing.slippage.exit * self.gap)
     @property
     def commissions(self): return self.costing.commissions * self.quantities.sum()
     @property
     def intent(self): return Intent.CLOSE
-
-    @cached_property
-    def priority(self): pass
 
     @cached_property
     def entry(self): return (self.securities["entry"] * self.positions.map(int) * self.quantities).sum()

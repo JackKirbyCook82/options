@@ -59,12 +59,9 @@ class Taus:
 @dataclass(frozen=True)
 class Maes: radii: Radii; coverage: int = 10
 
-@dataclass(frozen=True)
-class Localizing:
-    taus: Taus; maes: Maes
 
-    @classmethod
-    def create(cls, /, radius, window, coverage, limit):
+class LocalizingMeta(type):
+    def __call__(cls, /, radius, window, coverage, limit):
         assert isinstance(radius, tuple) and len(radius) == 3
         assert isinstance(window, tuple) and len(window) == 3
         assert isinstance(coverage, tuple) and len(coverage) == 2
@@ -74,7 +71,11 @@ class Localizing:
         assert radii.outer >= radii.inner and windows.outer >= windows.inner
         taus = Taus(windows=windows, coverage=coverage[0], limit=float(limit))
         maes = Maes(radii=radii, coverage=coverage[1])
-        return cls(taus=taus, maes=maes)
+        instance = super().__call__(taus=taus, maes=maes)
+        return instance
+
+@dataclass(frozen=True)
+class Localizing(metaclass=LocalizingMeta): taus: Taus; maes: Maes
 
 
 class LocalizingError(Exception): pass
