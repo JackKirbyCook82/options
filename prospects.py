@@ -119,6 +119,8 @@ class Prospect(ABC):
     def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
     @property
     def cost(self): return self.commissions + self.slippage
+    @property
+    def price(self): return self.market
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
@@ -148,11 +150,11 @@ class Prospect(ABC):
     @property
     def costing(self): return self.__costing
     @property
-    def spread(self): return self.__spread
-    @property
     def expires(self): return self.__expires
     @property
     def ticker(self): return self.__ticker
+    @property
+    def spread(self): return self.__spread
 
     @property
     @abstractmethod
