@@ -8,25 +8,26 @@ Created on Mon Jul 6 2026
 
 import math
 import pandas as pd
-from itertools import product
 from abc import ABC, abstractmethod
 from functools import cached_property
 from dataclasses import dataclass, field, astuple
 
-from options.prospects import Prospect, Scenario
+from options.prospects import Prospect
 from finance.enumerations import Spread, Instrument, Option, Position, Intent
 from finance.specifications import Securities
+from finance.logging import Logging
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["AcquisitionCreators", "Metrics", "Weights", "Targets", "Priority"]
+__all__ = ["AcquisitionCalculator", "Weights", "Targets", "Metrics", "Priority"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
 @dataclass(frozen=True, slots=True)
 class Measures: zspread: float; multiple: float; ratio: float
+
 class Weights(Measures): pass
 class Targets(Measures): pass
 class Metrics(Measures):
@@ -45,13 +46,15 @@ class Metrics(Measures):
 
 @dataclass(frozen=True, slots=True)
 class Priority:
-    targets: Measures = field(default_factory=lambda: Measures(zspread=3.0, multiple=4.0, ratio=20.0))
-    weights: Measures = field(default_factory=lambda: Measures(zspread=0.20, multiple=0.30, ratio=0.35))
+    targets: Measures = field(default_factory=lambda: Measures(zspread=3.0, multiple=5.0, ratio=20.0))
+    weights: Measures = field(default_factory=lambda: Measures(zspread=0.30, multiple=0.30, ratio=0.40))
 
     def __call__(self, acquisition):
         assert isinstance(acquisition, Acquisition)
         values = Measures(zspread=acquisition.zspread, multiple=acquisition.multiple, ratio=acquisition.ratio)
-        generator = zip(astuple(values), astuple(self.targets), astuple(self.weights))
+        weights, total = astuple(self.weights), sum(astuple(self.weights))
+        weights = (weight / total for weight in weights)
+        generator = zip(astuple(values), astuple(self.targets), weights)
         function = lambda value, target, weight: weight * math.log(max(value / (value + target), 1e-12))
         return math.exp(sum([function(*arguments) for arguments in generator]))
 
@@ -67,26 +70,12 @@ class Acquisition(Prospect):
     @cached_property
     def multiple(self): return self.edge / self.cost
     @cached_property
-    def ratio(self): return self.gain / self.loss
+    def ratio(self): return self.pnl / self.var
 
     @cached_property
     def edge(self): return self.forecast - self.market
     @cached_property
-    def gain(self): return self.edge - self.cost
-
-    @cached_property
-    def loss(self):
-        generator = product(range(-1, 2), range(-1, 2))
-        scenarios = (Scenario(zscore=zscore, vpts=vpts, tdays=1, cdays=1) for zscore, vpts in generator)
-        worse = min([self.risk(scenario) for scenario in scenarios]) - self.cost
-        return max(self.cost, - worse)
-
-
-class AcquisitionCreators(object):
-    def __new__(cls, *args, spreads, **kwargs):
-        spreads = [spread for spread in spreads if spread != Spread.EMPTY]
-        instances = {spread: AcquisitionCreator[spread](*args, **kwargs) for spread in spreads}
-        return instances
+    def pnl(self): return self.edge - self.cost
 
 
 class AcquisitionCreator(ABC, metaclass=RegistryMeta):
@@ -177,5 +166,36 @@ class CalendarAcquisitionCreator(AcquisitionCreator, register=Spread.CALENDAR):
         return prospect
 
 
+class AcquisitionCalculator(Logging):
+    def __init__(self, *args, spreads, metrics, priority, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__creators = {spread: AcquisitionCreator[spread](*args, **kwargs) for spread in spreads}
+        self.__priority = priority
+        self.__metrics = metrics
 
+    def __call__(self, holdings, /, **kwargs):
+        assert isinstance(holdings, pd.DataFrame)
+        prospects = self.calculate(holdings, **kwargs)
+        self.results(prospects, title="Calculator", instrument=Instrument.SPREAD)
+        return prospects
+
+    def calculate(self, holdings, /, **kwargs):
+        assert isinstance(holdings, pd.DataFrame)
+        prospects = self.calculator(holdings, **kwargs)
+        prospects = sorted(prospects, key=self.priority, reverse=True)
+        return prospects
+
+    def calculator(self, holdings, /, **kwargs):
+        assert isinstance(holdings, pd.DataFrame)
+        for spread, creator in self.creators.items():
+            for prospect in creator(holdings, **kwargs):
+                if not self.metrics(prospect): continue
+                yield prospect
+
+    @property
+    def creators(self): return self.__creators
+    @property
+    def priority(self): return self.__priority
+    @property
+    def metrics(self): return self.__metrics
 

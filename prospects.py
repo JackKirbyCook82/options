@@ -8,19 +8,19 @@ Created on Sat May 16 2026
 
 import math
 import pandas as pd
+from itertools import product
 from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
 
 from finance.osi import OSI
-from finance.logging import Logging
-from finance.enumerations import Spread, Instrument, Action
+from finance.enumerations import Spread, Action
 from support.custom import DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["ProspectCalculator", "Prospect", "Scenario", "Costing", "Slippage"]
+__all__ = ["Prospect", "Scenario", "Costing", "Slippage"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -106,6 +106,13 @@ class Prospect(ABC):
         elif self.spread is Spread.FLY: return self.zscore / (self.quantities.sum() / 2)
         else: raise ValueError(self.spread)
 
+    @cached_property
+    def var(self):
+        generator = product(range(-1, 2), range(-1, 2))
+        scenarios = (Scenario(zscore=zscore, vpts=vpts, tdays=1, cdays=1) for zscore, vpts in generator)
+        worse = min([self.risk(scenario) for scenario in scenarios]) - self.cost
+        return max(self.cost, - worse)
+
     @property
     def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
     @property
@@ -157,40 +164,6 @@ class Prospect(ABC):
     @abstractmethod
     def intent(self): pass
 
-
-class ProspectCalculator(Logging):
-    def __init__(self, *args, creators, metrics, priority, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__creators = creators
-        self.__priority = priority
-        self.__metrics = metrics
-
-    def __call__(self, holdings, /, **kwargs):
-        assert isinstance(holdings, pd.DataFrame)
-        prospects = self.calculate(holdings, **kwargs)
-        self.results(prospects, title="Calculator", instrument=Instrument.SPREAD)
-        return prospects
-
-    def calculate(self, holdings, /, **kwargs):
-        assert isinstance(holdings, pd.DataFrame)
-        prospects = self.calculator(holdings, **kwargs)
-        prospects = list(prospects)
-        prospects = sorted(prospects, key=self.priority, reverse=True)
-        return prospects
-
-    def calculator(self, holdings, /, **kwargs):
-        assert isinstance(holdings, pd.DataFrame)
-        for spread, creator in self.creators.items():
-            for prospect in creator(holdings, **kwargs):
-                if not self.metrics(prospect): continue
-                yield prospect
-
-    @property
-    def creators(self): return self.__creators
-    @property
-    def priority(self): return self.__priority
-    @property
-    def metrics(self): return self.__metrics
 
 
 

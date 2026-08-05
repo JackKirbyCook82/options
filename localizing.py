@@ -19,7 +19,7 @@ from support.custom import NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["PartitionCalculator", "ProximityCalculator", "Localizing"]
+__all__ = ["PartitionCalculator", "ProximityCalculator", "Variables"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -75,7 +75,7 @@ class LocalizingMeta(type):
         return instance
 
 @dataclass(frozen=True)
-class Localizing(metaclass=LocalizingMeta): taus: Taus; maes: Maes
+class Variables(metaclass=LocalizingMeta): taus: Taus; maes: Maes
 
 
 class LocalizingError(Exception): pass
@@ -84,10 +84,10 @@ class ProximityLocalizingError(LocalizingError): pass
 
 
 class LocalizingCalculator(Logging, ABC):
-    def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
-        assert isinstance(localizing, Localizing)
+    def __init__(self, *args, variables, samples=35, overlap=0.80, **kwargs):
+        assert isinstance(variables, Variables)
         super().__init__(*args, **kwargs)
-        self.__localizing = localizing
+        self.__variables = variables
         self.__overlap = float(overlap)
         self.__samples = int(samples)
 
@@ -95,19 +95,19 @@ class LocalizingCalculator(Logging, ABC):
         taus = np.sort(generalized["tau"].unique().astype(float))
         mae = generalized["mae"].to_numpy(dtype=float)
         low, high = np.nanmin(mae), np.nanmax(mae)
-        step = self.localizing.maes.radii.inner / 2
+        step = self.variables.maes.radii.inner / 2
         maes = np.arange(low, high + step, step, dtype=float)
         order = np.argsort(np.abs(maes))
         return SimpleNamespace(tau=taus, mae=maes[order])
 
     def taus(self, center, centers, /, index):
-        for window in self.localizing.taus.windows:
+        for window in self.variables.taus.windows:
             low = max(0, index - window)
             high = min(len(centers), index + window + 1)
             population = centers[low:high]
             if len(population) == 0: continue
             size = float(np.max(population) - np.min(population))
-            if size > self.localizing.taus.limit: continue
+            if size > self.variables.taus.limit: continue
             yield Tau(population=population, center=center, span=window)
 
     def maes(self, center):
@@ -116,8 +116,8 @@ class LocalizingCalculator(Logging, ABC):
             yield Mae(population=population, center=center, span=radius)
 
     def adequate(self, proposed):
-        tau = proposed["tau"].nunique() >= self.localizing.taus.coverage
-        mae = proposed["mae"].nunique() >= self.localizing.maes.coverage
+        tau = proposed["tau"].nunique() >= self.variables.taus.coverage
+        mae = proposed["mae"].nunique() >= self.variables.maes.coverage
         return (len(proposed) >= self.samples) and tau and mae
 
     def similar(self, proposed, history):
@@ -172,7 +172,7 @@ class LocalizingCalculator(Logging, ABC):
             except StopIteration: yield from left; return
 
     @property
-    def localizing(self): return self.__localizing
+    def variables(self): return self.__variables
     @property
     def samples(self): return self.__samples
     @property
