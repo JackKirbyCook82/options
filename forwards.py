@@ -56,7 +56,7 @@ class ForwardCalculator(Logging):
             assert (tau[0] == tau).all() and (underlying[0] == underlying).all()
             try:
                 samples = self.samples(options, **kwargs)
-                mask = samples["gap"] / samples["median"] <= self.tightness
+                mask = samples["gap"] / samples["market"] <= self.tightness
                 samples = samples.where(mask).dropna(how="all", inplace=False)
                 weights = self.weights(samples, **kwargs)
                 if len(samples) >= self.samplesize:

@@ -111,7 +111,7 @@ class LocalizingCalculator(Logging, ABC):
             yield Tau(population=population, center=center, span=window)
 
     def maes(self, center):
-        for radius in self.localizing.maes.radii:
+        for radius in self.variables.maes.radii:
             population = NumberRange([center - radius, center + radius])
             yield Mae(population=population, center=center, span=radius)
 
