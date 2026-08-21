@@ -173,22 +173,22 @@ class AcquisitionCalculator(Logging):
         self.__priority = priority
         self.__metrics = metrics
 
-    def __call__(self, holdings, /, **kwargs):
-        assert isinstance(holdings, pd.DataFrame)
-        prospects = self.calculate(holdings, **kwargs)
+    def __call__(self, options, /, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        prospects = self.calculate(options, **kwargs)
         self.results(prospects, title="Calculator", instrument=Instrument.SPREAD)
         return prospects
 
-    def calculate(self, holdings, /, **kwargs):
-        assert isinstance(holdings, pd.DataFrame)
-        prospects = self.calculator(holdings, **kwargs)
+    def calculate(self, options, /, **kwargs):
+        assert isinstance(options, pd.DataFrame)
+        prospects = self.calculator(options, **kwargs)
         prospects = sorted(prospects, key=self.priority, reverse=True)
         return prospects
 
-    def calculator(self, holdings, /, **kwargs):
-        assert isinstance(holdings, pd.DataFrame)
+    def calculator(self, options, /, **kwargs):
+        assert isinstance(options, pd.DataFrame)
         for spread, creator in self.creators.items():
-            for prospect in creator(holdings, **kwargs):
+            for prospect in creator(options, **kwargs):
                 if not self.metrics(prospect): continue
                 yield prospect
 
