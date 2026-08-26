@@ -60,7 +60,7 @@ class Taus:
 class Maes: radii: Radii; coverage: int = 10
 
 
-class LocalizingMeta(type):
+class VariablesMeta(type):
     def __call__(cls, /, radius, window, coverage, limit):
         assert isinstance(radius, tuple) and len(radius) == 3
         assert isinstance(window, tuple) and len(window) == 3
@@ -75,7 +75,7 @@ class LocalizingMeta(type):
         return instance
 
 @dataclass(frozen=True)
-class Variables(metaclass=LocalizingMeta): taus: Taus; maes: Maes
+class Variables(metaclass=VariablesMeta): taus: Taus; maes: Maes
 
 
 class LocalizingError(Exception): pass
@@ -184,7 +184,8 @@ class PartitionCalculator(LocalizingCalculator):
         assert isinstance(options, pd.DataFrame) and not options.empty
         options = self.cleaner(options)
         for partition in self.calculator(options, **kwargs):
-            self.results(partition, title="Calculated", instrument=Instrument.OPTION)
+            scope = self.scope(partition, instrument=Instrument.OPTION)
+            self.results(scope=scope, size=len(partition), title="Calculated")
             yield partition
 
     def calculator(self, options, **kwargs):
@@ -213,7 +214,8 @@ class ProximityCalculator(LocalizingCalculator):
         options = self.cleaner(options)
         proximity = self.cleaner(proximity)
         proximity = self.calculator(options, proximity, **kwargs)
-        self.results(proximity, title="Calculated", instrument=Instrument.OPTION)
+        scope = self.scope(proximity, instrument=Instrument.OPTION)
+        self.results(scope=scope, size=len(proximity), title="Calculated")
         return proximity
 
     def calculator(self, options, proximity, **kwargs):

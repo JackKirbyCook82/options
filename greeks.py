@@ -152,6 +152,7 @@ class GreekCalculator(Logging):
 
     def __call__(self, options, /, interest, dividends, signature, delimiter=None, **kwargs):
         assert isinstance(options, pd.DataFrame)
+        scope = self.scope(options, instrument=Instrument.OPTION)
         try: volatility, prefix = str(signature).split("->")
         except AttributeError: raise GreekSignatureError()
         x = options["underlying"].to_numpy(np.float64)
@@ -166,7 +167,7 @@ class GreekCalculator(Logging):
         if bool(delimiter): greeks = {str(delimiter).join([prefix, key]): value for key, value in greeks.items()}
         greeks = pd.DataFrame(greeks, index=options.index)
         options = pd.concat([options, greeks], axis=1)
-        self.results(options, title="Calculated", instrument=Instrument.OPTION)
+        self.results(scope=scope, size=len(options), title="Calculated")
         return options
 
     @property

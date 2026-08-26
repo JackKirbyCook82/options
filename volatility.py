@@ -177,6 +177,7 @@ class VolatilityCalculator(Logging):
 
     def __call__(self, options, /, interest, dividends, signature, **kwargs):
         assert isinstance(options, pd.DataFrame)
+        scope = self.scope(options, instrument=Instrument.OPTION)
         try: valuation, volatility = str(signature).split("->")
         except AttributeError: raise VolatilitySignatureError()
         x = options["underlying"].to_numpy(np.float64)
@@ -186,7 +187,7 @@ class VolatilityCalculator(Logging):
         try: τ = options["tau"].to_numpy(np.float64)
         except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
         options[volatility] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
-        self.results(options, title="Calculated", instrument=Instrument.OPTION)
+        self.results(scope=scope, size=len(options), title="Calculated")
         return options
 
     @property

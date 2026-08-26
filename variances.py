@@ -64,9 +64,10 @@ class VarianceCalculator(Logging, Equations):
 
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
+        scope = self.scope(options, instrument=Instrument.OPTION)
         variance = self.execute(options, **kwargs)
         options = pd.concat([options, variance], axis=1)
-        self.results(options, title="Calculated", instrument=Instrument.OPTION)
+        self.results(scope=scope, size=len(options), title="Calculated")
         return options
 
 
@@ -81,15 +82,14 @@ class VarianceScreener(Logging):
 
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
+        scope = self.scope(options, instrument=Instrument.OPTION)
         if bool(options.empty): return options
         mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
         options = options[mask].dropna(how="all", inplace=False)
-        previous = len(options.index)
-        options = self.screener(options)
-        post = len(options.index)
-        sizes = dict(previous=previous, post=post)
-        self.results(options, title="Screener", instrument=Instrument.OPTION, **sizes)
-        return options
+        screened = self.screener(options)
+        size = (len(options.index), len(screened.index))
+        self.results(scope=scope, size=size, title="Screened")
+        return screened
 
     def screener(self, options):
         tau = options["tau"].to_numpy(dtype=float)
@@ -120,13 +120,14 @@ class VarianceStandardizer(Logging):
 
     def __call__(self, options, surface, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
+        scope = self.scope(options, instrument=Instrument.OPTION)
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standardize(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="zscore", index=options.index)
         options = pd.concat([options, standard], axis=1)
-        self.results(options, title="Calculated", instrument=Instrument.OPTION)
+        self.results(scope=scope, size=len(options), title="Calculated")
         return options
 
     def standardize(self, t, k, w, f):

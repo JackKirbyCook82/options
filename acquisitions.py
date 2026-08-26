@@ -175,8 +175,10 @@ class AcquisitionCalculator(Logging):
 
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
+        scope = self.scope(options, instrument=Instrument.OPTION)
         prospects = self.calculate(options, **kwargs)
-        self.results(prospects, title="Calculator", instrument=Instrument.SPREAD)
+        size = (len(options.index), len(prospects))
+        self.results(scope=scope, size=size, title="Calculated")
         return prospects
 
     def calculate(self, options, /, **kwargs):

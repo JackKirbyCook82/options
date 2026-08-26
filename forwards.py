@@ -33,9 +33,10 @@ class ForwardCalculator(Logging):
 
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
+        scope = self.scope(options, instrument=Instrument.OPTION)
         options = self.calculate(options, **kwargs)
         options = options.sort_index(inplace=False)
-        self.results(options, title="Calculated", instrument=Instrument.OPTION)
+        self.results(scope=scope, size=len(options), title="Calculated")
         return options
 
     def calculate(self, options, /, **kwargs):
