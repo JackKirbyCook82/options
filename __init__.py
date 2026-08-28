@@ -9,7 +9,6 @@ Created on Mon Mar 23 2026
 
 import numpy as np
 import pandas as pd
-from typing import Optional
 from datetime import date as Date
 from dataclasses import dataclass
 
@@ -27,9 +26,9 @@ __license__ = "MIT License"
 
 @dataclass(frozen=True, slots=True)
 class Measure:
-    moneyness: Optional[float, NumberRange] = None
-    tightness: Optional[float, NumberRange] = None
-    activity: Optional[float, NumberRange] = None
+    moneyness: float | NumberRange
+    tightness: float | NumberRange
+    activity: float | NumberRange
 
 class Metric(Measure):
     def __post_init__(self):
@@ -39,9 +38,9 @@ class Metric(Measure):
 
     def __call__(self, measure):
         assert isinstance(measure, Measure)
-        if (self.moneyness is not None) and (abs(measure.moneyness >= self.moneyness)): return False
-        if (self.tightness is not None) and (measure.tightness >= self.tightness): return False
-        if (self.activity is not None) and (measure.activity <= self.activity): return False
+        if abs(measure.moneyness) > self.moneyness: return False
+        if measure.tightness > self.tightness: return False
+        if measure.activity < self.activity: return False
         return True
 
 
@@ -90,7 +89,7 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
     activated = lambda activity, *, active: activity >= float(active) if active is not None else pd.Series(True, index=activity.index)
 
     def __init__(self, *args, metric, **kwargs):
-        parameters = dict(money=metric.moneyness, tight=metric.tightness, active=metric.active)
+        parameters = dict(money=metric.moneyness, tight=metric.tightness, active=metric.activity)
         super().__init__(*args, **parameters, **kwargs)
         self.__metric = metric
 
@@ -100,15 +99,15 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
         viability = self.execute(options, **kwargs)
         viable = options.where(viability["viability"]).dropna(how="all", inplace=False)
         size = (len(options.index), len(viable.index))
-        breakdown = self.breakdown(options, viability)
-        self.results(scope=scope, size=size, pre=breakdown, title="Filtered")
+        strings = self.breakdown(options, viability)
+        self.results(scope=scope, size=size, strings=strings, title="Filtered")
         return viable
 
     def breakdown(self, options, viability):
         boundary = self.boundary(options)
         survival = self.survival(viability)
-        moneyness = f"Moneyness>={self.metric.moneyness:.1f}[{survival.moneyness:.0f}%, f{boundary.moneyness.minimum:.1f}->f{boundary.moneyness.maximum:.1f}]"
-        tightness = f"Tightness>={self.metric.tightness:.1f}[{survival.tightness:.0f}%, f{boundary.tightness.minimum:.1f}->f{boundary.tightness.maximum:.1f}]"
+        moneyness = f"Moneyness<={self.metric.moneyness:.1f}[{survival.moneyness:.0f}%, f{boundary.moneyness.minimum:.1f}->f{boundary.moneyness.maximum:.1f}]"
+        tightness = f"Tightness<={self.metric.tightness:.1f}[{survival.tightness:.0f}%, f{boundary.tightness.minimum:.1f}->f{boundary.tightness.maximum:.1f}]"
         activity = f"Activity>={self.metric.activity:.1f}[{survival.activity:.0f}%, f{boundary.activity.minimum:.1f}->f{boundary.activity.maximum:.1f}]"
         return [moneyness, tightness, activity]
 

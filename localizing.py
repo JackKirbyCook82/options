@@ -61,8 +61,12 @@ class Taus:
 class Maes: radii: Radii; coverage: int = 10
 
 
-class VariablesMeta(type):
-    def __call__(cls, /, radius, window, coverage, limit):
+@dataclass(frozen=True)
+class LocalizingVariables:
+    taus: Taus; maes: Maes
+
+    @classmethod
+    def create(cls, /, radius, window, coverage, limit):
         assert isinstance(radius, tuple) and len(radius) == 3
         assert isinstance(window, tuple) and len(window) == 3
         assert isinstance(coverage, tuple) and len(coverage) == 2
@@ -72,11 +76,8 @@ class VariablesMeta(type):
         assert radii.outer >= radii.inner and windows.outer >= windows.inner
         taus = Taus(windows=windows, coverage=coverage[0], limit=float(limit))
         maes = Maes(radii=radii, coverage=coverage[1])
-        instance = super().__call__(taus=taus, maes=maes)
+        instance = cls(taus=taus, maes=maes)
         return instance
-
-@dataclass(frozen=True)
-class LocalizingVariables(metaclass=VariablesMeta): taus: Taus; maes: Maes
 
 
 class LocalizingError(Exception): pass
@@ -221,10 +222,10 @@ class ProximityCalculator(LocalizingCalculator):
 
     def calculator(self, options, proximity, **kwargs):
         for local in self.generator(options, proximity, **kwargs):
-            proximity = self.localize(options, local)
+            proposed  = self.localize(options, local)
             if not self.adequate(proximity): continue
             if not self.contained(proximity, proximity): continue
-            return proximity
+            return proposed
         raise ProximityLocalizingError()
 
     def generator(self, options, proximity, **kwargs):

@@ -41,7 +41,7 @@ class Metric(Measure):
 
     def __call__(self, measure):
         assert isinstance(measure, Measure)
-        if measure.zspread <= self.zspread: return False
+        if abs(measure.zspread) <= self.zspread: return False
         if measure.multiple <= self.multiple: return False
         if measure.ratio <= self.ratio: return False
         return True
@@ -53,7 +53,7 @@ class Priority:
 
     def __call__(self, acquisition):
         assert isinstance(acquisition, Acquisition)
-        values = Measure(zspread=acquisition.zspread, multiple=acquisition.multiple, ratio=acquisition.ratio)
+        values = Measure(zspread=abs(acquisition.zspread), multiple=acquisition.multiple, ratio=acquisition.ratio)
         weights, total = astuple(self.weights), sum(astuple(self.weights))
         weights = (weight / total for weight in weights)
         generator = zip(astuple(values), astuple(self.targets), weights)
@@ -188,12 +188,12 @@ class AcquisitionCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
         prospects = [prospect for spread, creator in self.creators.items() for prospect in creator(options, **kwargs)]
-        acquisitions = [prospect for prospect in prospects if self.metrics(prospect.measure)]
+        acquisitions = [prospect for prospect in prospects if self.metric(prospect.measure)]
         acquisitions.sort(key=lambda prospect: prospect.priority, reverse=True)
         size = (len(prospects), len(acquisitions))
-        breakdown = self.breakdown(prospects)
-        self.results(scope=scope, size=size, pre=breakdown, title="Calculated")
-        return prospects
+        strings = self.breakdown(prospects) if bool(prospects) else []
+        self.results(scope=scope, size=size, strings=strings, title="Calculated")
+        return acquisitions
 
     def breakdown(self, prospects):
         boundary = self.boundary(prospects)
@@ -204,9 +204,9 @@ class AcquisitionCalculator(Logging):
         return [zspread, multiple, ratio]
 
     def survival(self, prospects):
-        zspreads = [prospect.measure.zspread >= self.metrics.zspread for prospect in prospects]
-        multiples = [prospect.measure.multiple >= self.metrics.multiple for prospect in prospects]
-        ratios = [prospect.measure.ratio >= self.metrics.ratio for prospect in prospects]
+        zspreads = [prospect.measure.zspread >= self.metric.zspread for prospect in prospects]
+        multiples = [prospect.measure.multiple >= self.metric.multiple for prospect in prospects]
+        ratios = [prospect.measure.ratio >= self.metric.ratio for prospect in prospects]
         zspreads = sum(zspreads) / len(zspreads) * 100
         multiples = sum(multiples) / len(multiples) * 100
         ratios = sum(ratios) / len(ratios) * 100
