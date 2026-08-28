@@ -3,12 +3,13 @@
 Created on Mon Mar 23 2026
 @name:   Option Objects
 @author: Jack Kirby Cook
+@file:   options/__init__.py
 
 """
 
 import numpy as np
 import pandas as pd
-from itertools import product
+from typing import Optional
 from datetime import date as Date
 from dataclasses import dataclass
 
@@ -19,9 +20,29 @@ from support.custom import NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["OptionCalculator", "SurvivalCalculator", "SanityFilter", "ViabilityFilter"]
+__all__ = ["OptionCalculator", "SanityFilter", "ViabilityFilter", "ViabilityMetric"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass(frozen=True, slots=True)
+class Measure:
+    moneyness: Optional[float, NumberRange] = None
+    tightness: Optional[float, NumberRange] = None
+    activity: Optional[float, NumberRange] = None
+
+class Metric(Measure):
+    def __post_init__(self):
+        assert self.moneyness > 0
+        assert self.tightness > 0
+        assert self.activity > 0
+
+    def __call__(self, measure):
+        assert isinstance(measure, Measure)
+        if (self.moneyness is not None) and (abs(measure.moneyness >= self.moneyness)): return False
+        if (self.tightness is not None) and (measure.tightness >= self.tightness): return False
+        if (self.activity is not None) and (measure.activity <= self.activity): return False
+        return True
 
 
 class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", "activity", "market", "gap", "dte"]):
@@ -40,48 +61,6 @@ class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", 
         options = pd.concat([options, calculated], axis=1)
         self.results(scope=scope, size=len(options), title="Calculated")
         return options
-
-
-class SurvivalCalculator(Logging):
-    def __init__(self, *args, tight, money, active, gridsize=25, **kwargs):
-        assert isinstance(tight, (float, NumberRange)) and isinstance(money, (float, NumberRange)) and isinstance(active, (float, NumberRange))
-        assert isinstance(gridsize, int)
-        super().__init__(*args, **kwargs)
-        self.__viability = Viability(tight, money, active)
-        self.__gridsize = gridsize
-
-    def __call__(self, options, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        scope = self.scope(options, instrument=Instrument.OPTION)
-        survivals = self.generate(options, **kwargs)
-        size = (len(options.index), len(survivals.index))
-        self.results(scope=scope, size=size, title="Calculated")
-        return survivals
-
-    def generate(self, options, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        generator = self.generator(options, **kwargs)
-        survivals = list(generator)
-        survivals = pd.DataFrame(survivals)
-        return survivals
-
-    def generator(self, options, **kwargs):
-        moneyness = np.abs(pd.to_numeric(options["moneyness"], errors="coerce"))
-        tightness = pd.to_numeric(options["tightness"], errors="coerce")
-        activity = pd.to_numeric(options["activity"], errors="coerce")
-        gridsize = int(self.gridsize)
-        for tight, money, active in self.viability(gridsize):
-            activated = activity >= active
-            tightened = tightness <= tight
-            moneyed = moneyness <= money
-            viable = activated & tightened & moneyed
-            survival = int(viable.sum())
-            yield dict(tightness=tight, moneyness=money, activity=activity, survival=survival)
-
-    @property
-    def viability(self): return self.__viability
-    @property
-    def gridsize(self): return self.__gridsize
 
 
 class SanityFilter(Logging, Equations, parameters={"size": 1}):
@@ -103,47 +82,53 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
         return filtered
 
 
-@dataclass(frozen=True)
-class Viability:
-    tight: float | NumberRange; money: float | NumberRange; active: int | NumberRange
-
-    def __iter__(self): yield self.tight; yield self.money; yield self.active
-    def __call__(self, gridsize):
-        function = lambda variable: np.linspace(variable.minimum, variable.maximum, gridsize) if isinstance(variable, NumberRange) else np.array([variable])
-        variables = [function(variable) for variable in iter(self)]
-        yield from product(*variables)
-
-
+class ViabilityMetric(Metric): pass
 class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": None, "active": None}):
     viability = lambda moneyed, tightened, activated: np.logical_and.reduce([moneyed, tightened, activated])
     tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
     moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
     activated = lambda activity, *, active: activity >= float(active) if active is not None else pd.Series(True, index=activity.index)
 
+    def __init__(self, *args, metric, **kwargs):
+        parameters = dict(money=metric.moneyness, tight=metric.tightness, active=metric.active)
+        super().__init__(*args, **parameters, **kwargs)
+        self.__metric = metric
+
     def __call__(self, options, **kwargs):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
         viability = self.execute(options, **kwargs)
-        self.scope(options, instrument=Instrument.OPTION)
-        filtered = options.where(viability["viability"]).dropna(how="all", inplace=False)
-        size = (len(options.index), len(filtered.index))
-        self.results(scope=scope, size=size, title="Filtered")
-        self.breakdown(viability)
-        return options
+        viable = options.where(viability["viability"]).dropna(how="all", inplace=False)
+        size = (len(options.index), len(viable.index))
+        breakdown = self.breakdown(options, viability)
+        self.results(scope=scope, size=size, pre=breakdown, title="Filtered")
+        return viable
 
-    def breakdown(self, viabilities):
-        tightness = (viabilities['tightened']).sum() / len(viabilities.index) * 100
-        moneyness = (viabilities['moneyed']).sum() / len(viabilities.index) * 100
-        activity = (viabilities['activated']).sum() / len(viabilities.index) * 100
-        strings = list()
-        try: strings.append(f"Tight<={self.constants['tight']:.2f}: {tightness:.0f}%")
-        except KeyError: pass
-        try: strings.append(f"Money<={self.constants['money']:.2f}: {moneyness:.0f}%")
-        except KeyError: pass
-        try: strings.append(f"Active>={self.constants['active']:.0f}: {activity:.0f}%")
-        except KeyError: pass
-        self.console("Filtered", f"Options[{', '.join(strings)}]")
+    def breakdown(self, options, viability):
+        boundary = self.boundary(options)
+        survival = self.survival(viability)
+        moneyness = f"Moneyness>={self.metric.moneyness:.1f}[{survival.moneyness:.0f}%, f{boundary.moneyness.minimum:.1f}->f{boundary.moneyness.maximum:.1f}]"
+        tightness = f"Tightness>={self.metric.tightness:.1f}[{survival.tightness:.0f}%, f{boundary.tightness.minimum:.1f}->f{boundary.tightness.maximum:.1f}]"
+        activity = f"Activity>={self.metric.activity:.1f}[{survival.activity:.0f}%, f{boundary.activity.minimum:.1f}->f{boundary.activity.maximum:.1f}]"
+        return [moneyness, tightness, activity]
 
+    @staticmethod
+    def survival(viability):
+        tightness = (viability['tightened']).sum() / len(viability.index) * 100
+        moneyness = (viability['moneyed']).sum() / len(viability.index) * 100
+        activity = (viability['activated']).sum() / len(viability.index) * 100
+        return Measure(moneyness, tightness, activity)
+
+    @staticmethod
+    def boundary(options):
+        options = options[["moneyness", "tightness", "activity"]]
+        moneyness = NumberRange(options["moneyness"].to_list())
+        tightness = NumberRange(options["tightness"].to_list())
+        activity = NumberRange(options["activity"].to_list())
+        return Measure(moneyness, tightness, activity)
+
+    @property
+    def metric(self): return self.__metric
 
 
 

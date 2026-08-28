@@ -3,6 +3,7 @@
 Created on Sat May 16 2026
 @name:   Option Spread Objects
 @author: Jack Kirby Cook
+@file:   options/prospects.py
 
 """
 
@@ -20,7 +21,7 @@ from support.custom import DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["Prospect", "Scenario", "Costing", "Slippage"]
+__all__ = ["Prospect", "ProspectCosting", "ProspectSlippage"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -56,6 +57,8 @@ class Risk:
     def vega(self, vpts): return self.greeks.vega * (vpts / 100)
 
 
+class ProspectSlippage(Slippage): pass
+class ProspectCosting(Costing): pass
 class Prospect(ABC):
     def __init__(self, spread, securities, /, costing):
         assert isinstance(securities, pd.DataFrame)
@@ -155,6 +158,13 @@ class Prospect(ABC):
     def ticker(self): return self.__ticker
     @property
     def spread(self): return self.__spread
+
+    @property
+    @abstractmethod
+    def measure(self): pass
+    @property
+    @abstractmethod
+    def priority(self): pass
 
     @property
     @abstractmethod

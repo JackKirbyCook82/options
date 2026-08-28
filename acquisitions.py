@@ -3,6 +3,7 @@
 Created on Mon Jul 6 2026
 @name:   Option Acquisition Objects
 @author: Jack Kirby Cook
+@file:   options/acquisitions.py
 
 """
 
@@ -10,48 +11,49 @@ import math
 import pandas as pd
 from abc import ABC, abstractmethod
 from functools import cached_property
-from dataclasses import dataclass, field, astuple
+from dataclasses import dataclass, astuple
 
 from options.prospects import Prospect
 from finance.enumerations import Spread, Instrument, Option, Position, Intent
 from finance.specifications import Securities
 from finance.logging import Logging
+from support.custom import NumberRange
 from support.meta import RegistryMeta
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["AcquisitionCalculator", "Weights", "Targets", "Metrics", "Priority"]
+__all__ = ["AcquisitionCalculator", "AcquisitionMetric"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
 @dataclass(frozen=True, slots=True)
-class Measures: zspread: float; multiple: float; ratio: float
+class Measure:
+    zspread: float | NumberRange
+    multiple: float | NumberRange
+    ratio: float | NumberRange
 
-class Weights(Measures): pass
-class Targets(Measures): pass
-class Metrics(Measures):
+class Metric(Measure):
     def __post_init__(self):
         assert self.zspread > 0
         assert self.multiple > 0
         assert self.ratio > 0
 
-    def __call__(self, acquisition):
-        assert isinstance(acquisition, Acquisition)
-        if acquisition.zspread <= self.zspread: return False
-        if acquisition.multiple <= self.multiple: return False
-        if acquisition.ratio <= self.ratio: return False
+    def __call__(self, measure):
+        assert isinstance(measure, Measure)
+        if measure.zspread <= self.zspread: return False
+        if measure.multiple <= self.multiple: return False
+        if measure.ratio <= self.ratio: return False
         return True
 
 
 @dataclass(frozen=True, slots=True)
 class Priority:
-    targets: Measures = field(default_factory=lambda: Measures(zspread=3.0, multiple=5.0, ratio=20.0))
-    weights: Measures = field(default_factory=lambda: Measures(zspread=0.30, multiple=0.30, ratio=0.40))
+    targets: Measure; weights: Measure
 
     def __call__(self, acquisition):
         assert isinstance(acquisition, Acquisition)
-        values = Measures(zspread=acquisition.zspread, multiple=acquisition.multiple, ratio=acquisition.ratio)
+        values = Measure(zspread=acquisition.zspread, multiple=acquisition.multiple, ratio=acquisition.ratio)
         weights, total = astuple(self.weights), sum(astuple(self.weights))
         weights = (weight / total for weight in weights)
         generator = zip(astuple(values), astuple(self.targets), weights)
@@ -66,6 +68,15 @@ class Acquisition(Prospect):
     def commissions(self): return self.costing.commissions * self.quantities.sum() * 2
     @property
     def intent(self): return Intent.OPEN
+
+    @property
+    def measure(self): return Measure(self.zspread, self.multiple, self.ratio)
+    @property
+    def priority(self):
+        targets = Measure(zspread=3.0, multiple=5.0, ratio=20.0)
+        weights = Measure(zspread=0.30, multiple=0.30, ratio=0.40)
+        priority = Priority(targets=targets, weights=weights)
+        return priority(self)
 
     @cached_property
     def multiple(self): return self.edge / self.cost
@@ -166,38 +177,55 @@ class CalendarAcquisitionCreator(AcquisitionCreator, register=Spread.CALENDAR):
         return prospect
 
 
+class AcquisitionMetric(Metric): pass
 class AcquisitionCalculator(Logging):
-    def __init__(self, *args, spreads, metrics, priority, **kwargs):
+    def __init__(self, *args, spreads, metric, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = {spread: AcquisitionCreator[spread](*args, **kwargs) for spread in spreads}
-        self.__priority = priority
-        self.__metrics = metrics
+        self.__metric = metric
 
     def __call__(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
-        prospects = self.calculate(options, **kwargs)
-        size = (len(options.index), len(prospects))
-        self.results(scope=scope, size=size, title="Calculated")
+        prospects = [prospect for spread, creator in self.creators.items() for prospect in creator(options, **kwargs)]
+        acquisitions = [prospect for prospect in prospects if self.metrics(prospect.measure)]
+        acquisitions.sort(key=lambda prospect: prospect.priority, reverse=True)
+        size = (len(prospects), len(acquisitions))
+        breakdown = self.breakdown(prospects)
+        self.results(scope=scope, size=size, pre=breakdown, title="Calculated")
         return prospects
 
-    def calculate(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        prospects = self.calculator(options, **kwargs)
-        prospects = sorted(prospects, key=self.priority, reverse=True)
-        return prospects
+    def breakdown(self, prospects):
+        boundary = self.boundary(prospects)
+        survival = self.survival(prospects)
+        zspread = f"ZSpread>={self.metric.zspread:.1f}[{survival.zspread:.0f}%, f{boundary.zspread.minimum:.1f}->f{boundary.zspread.maximum:.1f}]"
+        multiple = f"Multiple>={self.metric.multiple:.1f}[{survival.multiple:.0f}%, f{boundary.multiple.minimum:.1f}->f{boundary.multiple.maximum:.1f}]"
+        ratio = f"Ratio>={self.metric.ratio:.1f}[{survival.ratio:.0f}%, f{boundary.ratio.minimum:.1f}->f{boundary.ratio.maximum:.1f}]"
+        return [zspread, multiple, ratio]
 
-    def calculator(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame)
-        for spread, creator in self.creators.items():
-            for prospect in creator(options, **kwargs):
-                if not self.metrics(prospect): continue
-                yield prospect
+    def survival(self, prospects):
+        zspreads = [prospect.measure.zspread >= self.metrics.zspread for prospect in prospects]
+        multiples = [prospect.measure.multiple >= self.metrics.multiple for prospect in prospects]
+        ratios = [prospect.measure.ratio >= self.metrics.ratio for prospect in prospects]
+        zspreads = sum(zspreads) / len(zspreads) * 100
+        multiples = sum(multiples) / len(multiples) * 100
+        ratios = sum(ratios) / len(ratios) * 100
+        return Measure(zspreads, multiples, ratios)
+
+    @staticmethod
+    def boundary(prospects):
+        zspreads = [prospect.measure.zspread for prospect in prospects]
+        multiples = [prospect.measure.multiple for prospect in prospects]
+        ratios = [prospect.measure.ratio for prospect in prospects]
+        zspreads = NumberRange([min(zspreads), max(zspreads)])
+        multiples = NumberRange([min(multiples), max(multiples)])
+        ratios = NumberRange([min(ratios), max(ratios)])
+        return Measure(zspreads, multiples, ratios)
 
     @property
     def creators(self): return self.__creators
     @property
-    def priority(self): return self.__priority
-    @property
-    def metrics(self): return self.__metrics
+    def metric(self): return self.__metric
+
+
 
