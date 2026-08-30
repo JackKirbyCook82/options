@@ -84,8 +84,8 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
 class ViabilityMetric(Metric): pass
 class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": None, "active": None}):
     viability = lambda moneyed, tightened, activated: np.logical_and.reduce([moneyed, tightened, activated])
-    tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
     moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
+    tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
     activated = lambda activity, *, active: activity >= float(active) if active is not None else pd.Series(True, index=activity.index)
 
     def __init__(self, *args, metric, **kwargs):
@@ -99,23 +99,22 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
         viability = self.execute(options, **kwargs)
         viable = options.where(viability["viability"]).dropna(how="all", inplace=False)
         size = (len(options.index), len(viable.index))
-        strings = self.breakdown(options, viability)
+        strings = self.breakdown(options)
         self.results(scope=scope, size=size, strings=strings, title="Filtered")
         return viable
 
-    def breakdown(self, options, viability):
+    def breakdown(self, options):
         boundary = self.boundary(options)
-        survival = self.survival(viability)
-        moneyness = f"Moneyness<={self.metric.moneyness:.1f}[{survival.moneyness:.0f}%, f{boundary.moneyness.minimum:.1f}->f{boundary.moneyness.maximum:.1f}]"
-        tightness = f"Tightness<={self.metric.tightness:.1f}[{survival.tightness:.0f}%, f{boundary.tightness.minimum:.1f}->f{boundary.tightness.maximum:.1f}]"
-        activity = f"Activity>={self.metric.activity:.1f}[{survival.activity:.0f}%, f{boundary.activity.minimum:.1f}->f{boundary.activity.maximum:.1f}]"
+        survival = self.survival(options)
+        moneyness = f"|Moneyness| <= {self.metric.moneyness:.2f} [{boundary.moneyness.minimum:+.2f} -> {boundary.moneyness.maximum:+.2f}, {survival.moneyness:.0f}%]"
+        tightness = f"Tightness <= {self.metric.tightness:.2f} [{boundary.tightness.minimum:+.2f} -> {boundary.tightness.maximum:+.2f}, {survival.tightness:.0f}%]"
+        activity = f"Activity >= {self.metric.activity:.2f} [{boundary.activity.minimum:+.2f} -> {boundary.activity.maximum:+.2f}, {survival.activity:.0f}%]"
         return [moneyness, tightness, activity]
 
-    @staticmethod
-    def survival(viability):
-        tightness = (viability['tightened']).sum() / len(viability.index) * 100
-        moneyness = (viability['moneyed']).sum() / len(viability.index) * 100
-        activity = (viability['activated']).sum() / len(viability.index) * 100
+    def survival(self, options):
+        moneyness = (options["moneyness"].abs() <= self.metric.moneyness).sum() / len(options.index) * 100
+        tightness = (options["tightness"] <= self.metric.tightness).sum() / len(options.index) * 100
+        activity = (options["activity"] <= self.metric.activity).sum() / len(options.index) * 100
         return Measure(moneyness, tightness, activity)
 
     @staticmethod

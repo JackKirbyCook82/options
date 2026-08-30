@@ -73,7 +73,7 @@ class Acquisition(Prospect):
     def measure(self): return Measure(self.zspread, self.multiple, self.ratio)
     @property
     def priority(self):
-        targets = Measure(zspread=3.0, multiple=5.0, ratio=20.0)
+        targets = Measure(zspread=3.00, multiple=5.00, ratio=10.00)
         weights = Measure(zspread=0.30, multiple=0.30, ratio=0.40)
         priority = Priority(targets=targets, weights=weights)
         return priority(self)
@@ -198,9 +198,9 @@ class AcquisitionCalculator(Logging):
     def breakdown(self, prospects):
         boundary = self.boundary(prospects)
         survival = self.survival(prospects)
-        zspread = f"ZSpread>={self.metric.zspread:.1f}[{survival.zspread:.0f}%, f{boundary.zspread.minimum:.1f}->f{boundary.zspread.maximum:.1f}]"
-        multiple = f"Multiple>={self.metric.multiple:.1f}[{survival.multiple:.0f}%, f{boundary.multiple.minimum:.1f}->f{boundary.multiple.maximum:.1f}]"
-        ratio = f"Ratio>={self.metric.ratio:.1f}[{survival.ratio:.0f}%, f{boundary.ratio.minimum:.1f}->f{boundary.ratio.maximum:.1f}]"
+        zspread = f"|ZSpread| >= {self.metric.zspread:.2f} [{boundary.zspread.minimum:+.2f} -> {boundary.zspread.maximum:+.2f}, {survival.zspread:.0f}%]"
+        multiple = f"Multiple >= {self.metric.multiple:.2f} [{boundary.multiple.minimum:+.2f} -> {boundary.multiple.maximum:+.2f}, {survival.multiple:.0f}%]"
+        ratio = f"Ratio >= {self.metric.ratio:.2f} [{boundary.ratio.minimum:+.2f} -> {boundary.ratio.maximum:+.2f}, {survival.ratio:.0f}%]"
         return [zspread, multiple, ratio]
 
     def survival(self, prospects):
