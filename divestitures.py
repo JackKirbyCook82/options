@@ -14,7 +14,7 @@ from functools import cached_property
 from dataclasses import dataclass, astuple
 
 from options.prospects import Prospect
-from finance.enumerations import Intent
+from finance.enumerations import Intent, Instrument
 from finance.logging import Logging
 from pandas._config.config import Mode
 
@@ -43,11 +43,11 @@ class Metric(Measure):
         assert 0 < self.multiple < 1
         assert 0 < self.ratio < 1
 
-    def __call__(self, divestiture):
-        assert isinstance(divestiture, Divestiture)
+    def __call__(self, measure):
+        assert isinstance(measure, Measure)
         percentage = lambda quantative: quantative.capturable / quantative.forecasted
-        multiple = percentage(divestiture.multiple) <= self.multiple
-        ratio = percentage(divestiture.ratio) <= self.ratio
+        multiple = percentage(measure.multiple) <= self.multiple
+        ratio = percentage(measure.ratio) <= self.ratio
         if self.mode == Mode.ALL: return multiple and ratio
         elif self.mode == Mode.ANY: return multiple or ratio
         else: raise ValueError(self.mode)
@@ -128,6 +128,14 @@ class DivestitureCalculator(Logging):
 
     def __call__(self, holdings, /, **kwargs):
         assert isinstance(holdings, pd.DataFrame)
+        scope = self.scope(holdings, instrument=Instrument.OPTION)
+        prospects = [Divestiture(spread, securities) for (order, spread), securities in holdings.groupby(["order", "spread"])]
+        divestitures = [prospect for prospect in prospects if self.metric(prospect.measure)]
+        divestitures.sort(key=lambda prospect: prospect.priority, reverse=True)
+        size = (len(prospects), len(divestitures))
+        strings = self.breakdown(prospects) if bool(prospects) else []
+        self.results(scope=scope, size=size, strings=strings, title="Calculated")
+        return divestitures
 
     @property
     def metric(self): return self.__metric
