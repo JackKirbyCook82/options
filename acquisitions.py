@@ -9,6 +9,7 @@ Created on Mon Jul 6 2026
 
 import math
 import pandas as pd
+from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
 from dataclasses import dataclass, astuple
@@ -28,10 +29,7 @@ __license__ = "MIT License"
 
 
 @dataclass(frozen=True, slots=True)
-class Measure:
-    zspread: float | NumberRange
-    multiple: float | NumberRange
-    ratio: float | NumberRange
+class Measure: zspread: float; multiple: float; ratio: float
 
 class Metric(Measure):
     def __post_init__(self):
@@ -149,8 +147,7 @@ class FlyAcquisitionCreator(AcquisitionCreator, register=Spread.FLY):
         securities["spread"] = Spread.FLY
         securities["position"] = [wing, body, wing]
         securities["quantity"] = [1, 2, 1]
-        parameters = dict(costing=self.costing)
-        prospect = Acquisition(Spread.FLY, securities, **parameters)
+        prospect = Acquisition(Spread.FLY, securities, costing=self.costing)
         return prospect
 
 
@@ -172,8 +169,7 @@ class CalendarAcquisitionCreator(AcquisitionCreator, register=Spread.CALENDAR):
         securities["spread"] = Spread.CALENDAR
         securities["position"] = [near, far]
         securities["quantity"] = [1, 1]
-        parameters = dict(costing=self.costing)
-        prospect = Acquisition(Spread.CALENDAR, securities, **parameters)
+        prospect = Acquisition(Spread.CALENDAR, securities, costing=self.costing)
         return prospect
 
 
@@ -198,9 +194,9 @@ class AcquisitionCalculator(Logging):
     def breakdown(self, prospects):
         boundary = self.boundary(prospects)
         survival = self.survival(prospects)
-        zspread = f"|ZSpread| >= {self.metric.zspread:.2f} [{boundary.zspread.minimum:+.2f} -> {boundary.zspread.maximum:+.2f}, {survival.zspread:.0f}%]"
-        multiple = f"Multiple >= {self.metric.multiple:.2f} [{boundary.multiple.minimum:+.2f} -> {boundary.multiple.maximum:+.2f}, {survival.multiple:.0f}%]"
-        ratio = f"Ratio >= {self.metric.ratio:.2f} [{boundary.ratio.minimum:+.2f} -> {boundary.ratio.maximum:+.2f}, {survival.ratio:.0f}%]"
+        zspread = f"|ZSpread| >= {self.metric.zspread:.2f} [{boundary.zspreads.minimum:+.2f} -> {boundary.zspreads.maximum:+.2f}, {survival.zspreads:.0f}%]"
+        multiple = f"Multiple >= {self.metric.multiple:.2f} [{boundary.multiples.minimum:+.2f} -> {boundary.multiples.maximum:+.2f}, {survival.multiples:.0f}%]"
+        ratio = f"Ratio >= {self.metric.ratio:.2f} [{boundary.ratios.minimum:+.2f} -> {boundary.ratios.maximum:+.2f}, {survival.ratios:.0f}%]"
         return [zspread, multiple, ratio]
 
     def survival(self, prospects):
@@ -210,7 +206,7 @@ class AcquisitionCalculator(Logging):
         zspreads = sum(zspreads) / len(zspreads) * 100
         multiples = sum(multiples) / len(multiples) * 100
         ratios = sum(ratios) / len(ratios) * 100
-        return Measure(zspreads, multiples, ratios)
+        return SimpleNamespace(zspreads=zspreads, multiples=multiples, ratios=ratios)
 
     @staticmethod
     def boundary(prospects):
@@ -220,7 +216,7 @@ class AcquisitionCalculator(Logging):
         zspreads = NumberRange([min(zspreads), max(zspreads)])
         multiples = NumberRange([min(multiples), max(multiples)])
         ratios = NumberRange([min(ratios), max(ratios)])
-        return Measure(zspreads, multiples, ratios)
+        return SimpleNamespace(zspreads=zspreads, multiples=multiples, ratios=ratios)
 
     @property
     def creators(self): return self.__creators
