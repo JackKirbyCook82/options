@@ -9,7 +9,6 @@ Created on Mon Jul 6 2026
 
 import math
 import pandas as pd
-from typing import Optional
 from functools import cached_property
 from dataclasses import dataclass, astuple
 
@@ -25,44 +24,42 @@ __license__ = "MIT License"
 
 
 @dataclass(frozen=True, slots=True)
-class Quantative: forecasted: float; capturable: float
+class Quantative:
+    forecasted: float; capturable: float
+
+    def __float__(self):
+        return self.capturable / self.forecasted
+
 
 @dataclass(frozen=True, slots=True)
-class Measure: multiple: Quantative; ratio: Quantative
-
-@dataclass(frozen=True, slots=True)
-class Metric:
-    multiple: float; ratio: float; eager: Optional[bool] = None
+class Measure: multiple: float; ratio: float
+class Metric(Measure):
+    eager: bool
 
     def __post_init__(self):
         assert 0 < self.multiple < 1
         assert 0 < self.ratio < 1
 
-#    def __call__(self, measure):
-#        assert isinstance(measure, Measure)
-#        percentage = lambda quantative: quantative.capturable / quantative.forecasted
-#        multiple = percentage(measure.multiple) <= self.multiple
-#        ratio = percentage(measure.ratio) <= self.ratio
-#        if self.eager: return multiple and ratio
-#        else: return multiple or ratio
-
+    def __call__(self, prospect):
+        assert isinstance(prospect, Divestiture)
+        multiple = float(prospect.multiple) >= self.multiple
+        ratio = float(prospect.ratio) >= self.ratio
+        if bool(self.eager): return multiple or ratio
+        else: return multiple and ratio
 
 
 @dataclass(frozen=True, slots=True)
 class Priority:
     targets: Measure; weights: Measure
 
-#    def __call__(self, divestiture):
-#        assert isinstance(divestiture, Divestiture)
-#        percentage = lambda quantative: quantative.capturable / quantative.forecasted
-#        multiple = percentage(divestiture.multiple)
-#        ratio = percentage(divestiture.ratio)
-#        values = Measure(multiple=multiple, ratio=ratio)
-#        weights, total = astuple(self.weights), sum(astuple(self.weights))
-#        weights = (weight / total for weight in weights)
-#        generator = zip(astuple(values), astuple(self.targets), weights)
-#        function = lambda value, target, weight: weight * math.log(max(value / (value + target), 1e-12))
-#        return math.exp(sum([function(*arguments) for arguments in generator]))
+    def __call__(self, prospect):
+        assert isinstance(prospect, Divestiture)
+        values = Measure(multiple=float(prospect.multiple), ratio=float(prospect.ratio))
+        weights, total = astuple(self.weights), sum(astuple(self.weights))
+        weights = (weight / total for weight in weights)
+        generator = zip(astuple(values), astuple(self.targets), weights)
+        function = lambda value, target, weight: weight * math.log(max(value / (value + target), 1e-12))
+        return math.exp(sum([function(*arguments) for arguments in generator]))
 
 
 class Divestiture(Prospect):
@@ -73,8 +70,6 @@ class Divestiture(Prospect):
     @property
     def intent(self): return Intent.CLOSE
 
-    @property
-    def measure(self): return Measure(self.multiple, self.ratio)
     @property
     def priority(self):
         targets = Measure(multiple=1.00, ratio=1.00)
@@ -122,7 +117,7 @@ class DivestitureCalculator(Logging):
         assert isinstance(holdings, pd.DataFrame)
         scope = self.scope(holdings, instrument=Instrument.OPTION)
         prospects = [Divestiture(spread, securities, costing=self.costing) for (order, spread), securities in holdings.groupby(["order", "spread"])]
-        divestitures = [prospect for prospect in prospects if self.metric(prospect.measure)]
+        divestitures = [prospect for prospect in prospects if self.metric(prospect)]
         divestitures.sort(key=lambda prospect: prospect.priority, reverse=True)
         size = (len(prospects), len(divestitures))
         strings = self.breakdown(prospects) if bool(prospects) else []

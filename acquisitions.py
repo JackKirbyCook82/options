@@ -30,18 +30,17 @@ __license__ = "MIT License"
 
 @dataclass(frozen=True, slots=True)
 class Measure: zspread: float; multiple: float; ratio: float
-
 class Metric(Measure):
     def __post_init__(self):
         assert self.zspread > 0
         assert self.multiple > 0
         assert self.ratio > 0
 
-    def __call__(self, measure):
-        assert isinstance(measure, Measure)
-        if abs(measure.zspread) <= self.zspread: return False
-        if measure.multiple <= self.multiple: return False
-        if measure.ratio <= self.ratio: return False
+    def __call__(self, prospect):
+        assert isinstance(prospect, Acquisition)
+        if abs(prospect.zspread) <= self.zspread: return False
+        if prospect.multiple <= self.multiple: return False
+        if prospect.ratio <= self.ratio: return False
         return True
 
 
@@ -49,9 +48,9 @@ class Metric(Measure):
 class Priority:
     targets: Measure; weights: Measure
 
-    def __call__(self, acquisition):
-        assert isinstance(acquisition, Acquisition)
-        values = Measure(zspread=abs(acquisition.zspread), multiple=acquisition.multiple, ratio=acquisition.ratio)
+    def __call__(self, prospect):
+        assert isinstance(prospect, Acquisition)
+        values = Measure(zspread=abs(prospect.zspread), multiple=prospect.multiple, ratio=prospect.ratio)
         weights, total = astuple(self.weights), sum(astuple(self.weights))
         weights = (weight / total for weight in weights)
         generator = zip(astuple(values), astuple(self.targets), weights)
@@ -67,8 +66,6 @@ class Acquisition(Prospect):
     @property
     def intent(self): return Intent.OPEN
 
-    @property
-    def measure(self): return Measure(self.zspread, self.multiple, self.ratio)
     @property
     def priority(self):
         targets = Measure(zspread=3.00, multiple=5.00, ratio=10.00)
@@ -184,7 +181,7 @@ class AcquisitionCalculator(Logging):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
         prospects = [prospect for spread, creator in self.creators.items() for prospect in creator(options, **kwargs)]
-        acquisitions = [prospect for prospect in prospects if self.metric(prospect.measure)]
+        acquisitions = [prospect for prospect in prospects if self.metric(prospect)]
         acquisitions.sort(key=lambda prospect: prospect.priority, reverse=True)
         size = (len(prospects), len(acquisitions))
         strings = self.breakdown(prospects) if bool(prospects) else []
@@ -200,9 +197,9 @@ class AcquisitionCalculator(Logging):
         return [zspread, multiple, ratio]
 
     def survival(self, prospects):
-        zspreads = [prospect.measure.zspread >= self.metric.zspread for prospect in prospects]
-        multiples = [prospect.measure.multiple >= self.metric.multiple for prospect in prospects]
-        ratios = [prospect.measure.ratio >= self.metric.ratio for prospect in prospects]
+        zspreads = [prospect.zspread >= self.metric.zspread for prospect in prospects]
+        multiples = [prospect.multiple >= self.metric.multiple for prospect in prospects]
+        ratios = [prospect.ratio >= self.metric.ratio for prospect in prospects]
         zspreads = sum(zspreads) / len(zspreads) * 100
         multiples = sum(multiples) / len(multiples) * 100
         ratios = sum(ratios) / len(ratios) * 100
@@ -210,9 +207,9 @@ class AcquisitionCalculator(Logging):
 
     @staticmethod
     def boundary(prospects):
-        zspreads = [prospect.measure.zspread for prospect in prospects]
-        multiples = [prospect.measure.multiple for prospect in prospects]
-        ratios = [prospect.measure.ratio for prospect in prospects]
+        zspreads = [prospect.zspread for prospect in prospects]
+        multiples = [prospect.multiple for prospect in prospects]
+        ratios = [prospect.ratio for prospect in prospects]
         zspreads = NumberRange([min(zspreads), max(zspreads)])
         multiples = NumberRange([min(multiples), max(multiples)])
         ratios = NumberRange([min(ratios), max(ratios)])

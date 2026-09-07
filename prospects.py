@@ -161,13 +161,6 @@ class Prospect(ABC):
 
     @property
     @abstractmethod
-    def measure(self): pass
-    @property
-    @abstractmethod
-    def priority(self): pass
-
-    @property
-    @abstractmethod
     def commissions(self): pass
     @property
     @abstractmethod
