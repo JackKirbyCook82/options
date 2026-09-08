@@ -222,7 +222,7 @@ class ProximityCalculator(LocalizingCalculator):
 
     def calculator(self, options, proximity, **kwargs):
         for local in self.generator(options, proximity, **kwargs):
-            proposed  = self.localize(options, local)
+            proposed = self.localize(options, local)
             if not self.adequate(proximity): continue
             if not self.contained(proximity, proximity): continue
             return proposed

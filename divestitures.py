@@ -12,7 +12,7 @@ import pandas as pd
 from functools import cached_property
 from dataclasses import dataclass, astuple
 
-from options.prospects import Prospect
+from options.targets import Target
 from finance.enumerations import Intent, Instrument
 from finance.logging import Logging
 
@@ -62,7 +62,7 @@ class Priority:
         return math.exp(sum([function(*arguments) for arguments in generator]))
 
 
-class Divestiture(Prospect):
+class Divestiture(Target):
     @property
     def slippage(self): return max(self.liquidate, self.costing.slippage.exit * self.gap)
     @property
@@ -106,6 +106,7 @@ class Divestiture(Prospect):
         capturable = self.edge.capturable - self.cost - self.fees
         return Quantative(forecasted=forecasted, capturable=capturable)
 
+###
 
 class DivestitureMetric(Metric): pass
 class DivestitureCalculator(Logging):

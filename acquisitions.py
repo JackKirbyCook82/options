@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from dataclasses import dataclass, astuple
 
-from options.prospects import Prospect
+from options.targets import Target
 from finance.enumerations import Spread, Instrument, Option, Position, Intent
 from finance.specifications import Securities
 from finance.logging import Logging
@@ -58,7 +58,7 @@ class Priority:
         return math.exp(sum([function(*arguments) for arguments in generator]))
 
 
-class Acquisition(Prospect):
+class Acquisition(Target):
     @property
     def slippage(self): return (self.costing.slippage.entry + self.costing.slippage.exit) * self.gap
     @property
@@ -83,6 +83,7 @@ class Acquisition(Prospect):
     @cached_property
     def pnl(self): return self.edge - self.cost
 
+###
 
 class AcquisitionCreator(ABC, metaclass=RegistryMeta):
     def __init__(self, *args, costing, limit=1, **kwargs):
