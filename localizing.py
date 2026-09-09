@@ -20,7 +20,7 @@ from support.custom import NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["PartitionCalculator", "ProximityCalculator", "LocalizingVariables"]
+__all__ = ["PartitionCalculator", "ProximityCalculator", "Localizing"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -62,7 +62,7 @@ class Maes: radii: Radii; coverage: int = 10
 
 
 @dataclass(frozen=True)
-class LocalizingVariables:
+class Localizing:
     taus: Taus; maes: Maes
 
     @classmethod
@@ -87,7 +87,7 @@ class ProximityLocalizingError(LocalizingError): pass
 
 class LocalizingCalculator(Logging, ABC):
     def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
-        assert isinstance(localizing, LocalizingVariables)
+        assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
         self.__localizing = localizing
         self.__overlap = float(overlap)

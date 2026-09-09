@@ -8,20 +8,17 @@ Created on Sat May 16 2026
 """
 
 import math
-import pandas as pd
 from itertools import product
 from dataclasses import dataclass
-from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
 
-from finance.osi import OSI
-from finance.enumerations import Spread, Action
-from support.custom import DateRange
+from finance.enumerations import Action
+from options.prospects import Prospect
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["Target", "TargetCosting", "TargetSlippage"]
+__all__ = ["Target", "Costing", "Slippage"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -57,42 +54,11 @@ class Risk:
     def vega(self, vpts): return self.greeks.vega * (vpts / 100)
 
 
-class TargetSlippage(Slippage): pass
-class TargetCosting(Costing): pass
-class Target(ABC):
-    def __init__(self, spread, securities, /, costing):
-        assert isinstance(securities, pd.DataFrame)
+class Target(Prospect, ABC):
+    def __init__(self, *args, costing, **kwargs):
+        super().__init__(*args, **kwargs)
         assert isinstance(costing, Costing)
-        assert len(securities["ticker"].unique()) == 1
-        assert len(securities["underlying"].unique()) == 1
-        assert len(securities["volatility"].unique()) == 1
-        assert spread in list(Spread)
-        self.__ticker = securities["ticker"].unique()[0]
-        self.__expires = DateRange(securities["expire"].to_list())
-        self.__underlying = securities["underlying"].unique()[0]
-        self.__volatility = securities["volatility"].unique()[0]
-        self.__securities = securities
         self.__costing = costing
-        self.__spread = spread
-
-    def __iter__(self):
-        for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
-            yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
-
-    @cached_property
-    def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def market(self): return (self.securities["market"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def zscore(self): return (self.securities["zscore"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def delta(self): return (self.securities["delta"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def gamma(self): return (self.securities["gamma"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def theta(self): return (self.securities["theta"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def vega(self): return (self.securities["vega"] * self.positions.map(int) * self.quantities).sum()
 
     @cached_property
     def liquidate(self):
@@ -102,12 +68,6 @@ class Target(ABC):
         mask = actions.eq(int(Action.BUY))
         prices = self.securities["ask"].where(mask, self.securities["bid"])
         return abs((prices * positions * quantities).sum() - self.market)
-
-    @cached_property
-    def zspread(self):
-        if self.spread is Spread.CALENDAR: return self.zscore / (self.quantities.sum() / 2)
-        elif self.spread is Spread.FLY: return self.zscore / (self.quantities.sum() / 2)
-        else: raise ValueError(self.spread)
 
     @cached_property
     def var(self):
@@ -125,39 +85,8 @@ class Target(ABC):
     @property
     def price(self): return self.market
 
-    @property
-    def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
-    @property
-    def osi(self): return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
-
-    @property
-    def gap(self): return (self.securities["gap"] * self.quantities).sum()
-    @property
-    def tightness(self): return self.securities["tightness"].max()
-    @property
-    def moneyness(self): return self.securities["moneyness"].max()
-    @property
-    def activity(self): return self.securities["activity"].min()
-
-    @property
-    def positions(self): return self.securities["position"]
-    @property
-    def quantities(self): return self.securities["quantity"]
-
-    @property
-    def securities(self): return self.__securities
-    @property
-    def underlying(self): return self.__underlying
-    @property
-    def volatility(self): return self.__volatility
-    @property
-    def costing(self): return self.__costing
-    @property
-    def expires(self): return self.__expires
-    @property
-    def ticker(self): return self.__ticker
-    @property
-    def spread(self): return self.__spread
+    @classmethod
+    def create(cls, prospect): return cls(prospect.spread, prospect.securities)
 
     @property
     @abstractmethod
@@ -168,6 +97,9 @@ class Target(ABC):
     @property
     @abstractmethod
     def intent(self): pass
+
+    @property
+    def costing(self): return self.__costing
 
 
 

@@ -8,17 +8,19 @@ Created on Mon Jul 6 2026
 """
 
 import math
-import pandas as pd
+from types import SimpleNamespace
 from functools import cached_property
 from dataclasses import dataclass, astuple
 
 from options.targets import Target
-from finance.enumerations import Intent, Instrument
+from options.prospects import Prospect
+from finance.enumerations import Instrument, Intent
 from finance.logging import Logging
+from support.custom import NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["DivestitureCalculator", "DivestitureMetric"]
+__all__ = ["DivestitureCalculator", "DivestitureMetrics", "DivestitureTargets", "DivestitureWeights", "DivestiturePriority"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -70,13 +72,6 @@ class Divestiture(Target):
     @property
     def intent(self): return Intent.CLOSE
 
-    @property
-    def priority(self):
-        targets = Measure(multiple=1.00, ratio=1.00)
-        weights = Measure(multiple=0.45, ratio=0.55)
-        priority = Priority(targets=targets, weights=weights)
-        return priority(self)
-
     @cached_property
     def entry(self): return (self.securities["entry"] * self.positions.map(int) * self.quantities).sum()
     @cached_property
@@ -106,29 +101,57 @@ class Divestiture(Target):
         capturable = self.edge.capturable - self.cost - self.fees
         return Quantative(forecasted=forecasted, capturable=capturable)
 
-###
 
-class DivestitureMetric(Metric): pass
+class DivestitureMetrics(Metric): pass
+class DivestitureTargets(Measure): pass
+class DivestitureWeights(Measure): pass
+class DivestiturePriority(Priority): pass
 class DivestitureCalculator(Logging):
-    def __init__(self, *args, metric, costing, **kwargs):
+    def __init__(self, *args, metrics, priority, costing, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__priority = priority
+        self.__metrics = metrics
         self.__costing = costing
-        self.__metric = metric
 
-    def __call__(self, holdings, /, **kwargs):
-        assert isinstance(holdings, pd.DataFrame)
-        scope = self.scope(holdings, instrument=Instrument.OPTION)
-        prospects = [Divestiture(spread, securities, costing=self.costing) for (order, spread), securities in holdings.groupby(["order", "spread"])]
-        divestitures = [prospect for prospect in prospects if self.metric(prospect)]
-        divestitures.sort(key=lambda prospect: prospect.priority, reverse=True)
-        size = (len(prospects), len(divestitures))
-        strings = self.breakdown(prospects) if bool(prospects) else []
+    def __call__(self, prospects, **kwargs):
+        assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])
+        scope = self.scope(prospects, instrument=Instrument.SPREAD)
+        targets = [Divestiture.create(prospect) for prospect in prospects]
+        divestitures = [target for target in targets if self.metrics(target)]
+        divestitures.sort(key=self.priority, reverse=True)
+        size = (len(targets), len(divestitures))
+        strings = self.breakdown(targets) if bool(targets) else []
         self.results(scope=scope, size=size, strings=strings, title="Calculated")
         return divestitures
 
+    def breakdown(self, targets):
+        boundary = self.boundary(targets)
+        survival = self.survival(targets)
+        multiple = f"Multiple >= {self.metrics.multiple:.2f} [{boundary.multiples.minimum:+.2f} -> {boundary.multiples.maximum:+.2f}, {survival.multiples:.0f}%]"
+        ratio = f"Ratio >= {self.metrics.ratio:.2f} [{boundary.ratios.minimum:+.2f} -> {boundary.ratios.maximum:+.2f}, {survival.ratios:.0f}%]"
+        return [multiple, ratio]
+
+    def survival(self, targets):
+        multiples = [float(target.multiple) >= self.metrics.multiple for target in targets]
+        ratios = [float(target.ratio) >= self.metrics.ratio for target in targets]
+        multiples = sum(multiples) / len(multiples) * 100
+        ratios = sum(ratios) / len(ratios) * 100
+        return SimpleNamespace(multiples=multiples, ratios=ratios)
+
+    @staticmethod
+    def boundary(targets):
+        multiples = [float(target.multiple) for target in targets]
+        ratios = [float(target.ratio) for target in targets]
+        multiples = NumberRange([min(multiples), max(multiples)])
+        ratios = NumberRange([min(ratios), max(ratios)])
+        return SimpleNamespace(multiples=multiples, ratios=ratios)
+
+    @property
+    def priority(self): return self.__priority
+    @property
+    def metrics(self): return self.__metrics
     @property
     def costing(self): return self.__costing
-    @property
-    def metric(self): return self.__metric
 
 
 
