@@ -29,39 +29,41 @@ __license__ = "MIT License"
 class Quantative:
     forecasted: float; capturable: float
 
-    def __float__(self):
-        return self.capturable / self.forecasted
+#    def __float__(self):
+#        return self.capturable / self.forecasted
 
 
 @dataclass(frozen=True, slots=True)
 class Measure: multiple: float; ratio: float
-class Metric(Measure):
+
+@dataclass(frozen=True, slots=True)
+class Metrics(Measure):
     eager: bool
 
-    def __post_init__(self):
-        assert 0 < self.multiple < 1
-        assert 0 < self.ratio < 1
+#    def __post_init__(self):
+#        assert 0 < self.multiple < 1
+#        assert 0 < self.ratio < 1
 
-    def __call__(self, prospect):
-        assert isinstance(prospect, Divestiture)
-        multiple = float(prospect.multiple) >= self.multiple
-        ratio = float(prospect.ratio) >= self.ratio
-        if bool(self.eager): return multiple or ratio
-        else: return multiple and ratio
+#    def __call__(self, prospect):
+#        assert isinstance(prospect, Divestiture)
+#        multiple = float(prospect.multiple) >= self.multiple
+#        ratio = float(prospect.ratio) >= self.ratio
+#        if bool(self.eager): return multiple or ratio
+#        else: return multiple and ratio
 
 
 @dataclass(frozen=True, slots=True)
 class Priority:
     targets: Measure; weights: Measure
 
-    def __call__(self, prospect):
-        assert isinstance(prospect, Divestiture)
-        values = Measure(multiple=float(prospect.multiple), ratio=float(prospect.ratio))
-        weights, total = astuple(self.weights), sum(astuple(self.weights))
-        weights = (weight / total for weight in weights)
-        generator = zip(astuple(values), astuple(self.targets), weights)
-        function = lambda value, target, weight: weight * math.log(max(value / (value + target), 1e-12))
-        return math.exp(sum([function(*arguments) for arguments in generator]))
+#    def __call__(self, prospect):
+#        assert isinstance(prospect, Divestiture)
+#        values = Measure(multiple=float(prospect.multiple), ratio=float(prospect.ratio))
+#        weights, total = astuple(self.weights), sum(astuple(self.weights))
+#        weights = (weight / total for weight in weights)
+#        generator = zip(astuple(values), astuple(self.targets), weights)
+#        function = lambda value, target, weight: weight * math.log(max(value / (value + target), 1e-12))
+#        return math.exp(sum([function(*arguments) for arguments in generator]))
 
 
 class Divestiture(Target):
@@ -79,14 +81,14 @@ class Divestiture(Target):
 
     @cached_property
     def multiple(self):
-        forecasted = self.edge.forecasted / self.cost
+        forecasted = self.edge.forecasted / max(self.cost, 1e-10)
         capturable = self.edge.capturable / self.cost
         return Quantative(forecasted=forecasted, capturable=capturable)
 
     @cached_property
     def ratio(self):
-        forecasted = self.pnl.forecasted / self.var
-        capturable = self.pnl.capturable / self.var
+        forecasted = self.pnl.forecasted / max(self.var, 1e-10)
+        capturable = self.pnl.capturable / max(self.var, 1e-10)
         return Quantative(forecasted=forecasted, capturable=capturable)
 
     @cached_property
@@ -102,7 +104,7 @@ class Divestiture(Target):
         return Quantative(forecasted=forecasted, capturable=capturable)
 
 
-class DivestitureMetrics(Metric): pass
+class DivestitureMetrics(Metrics): pass
 class DivestitureTargets(Measure): pass
 class DivestitureWeights(Measure): pass
 class DivestiturePriority(Priority): pass
@@ -116,7 +118,7 @@ class DivestitureCalculator(Logging):
     def __call__(self, prospects, **kwargs):
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])
         scope = self.scope(prospects, instrument=Instrument.SPREAD)
-        targets = [Divestiture.create(prospect) for prospect in prospects]
+        targets = [Divestiture.create(prospect, costing=self.costing) for prospect in prospects]
         divestitures = [target for target in targets if self.metrics(target)]
         divestitures.sort(key=self.priority, reverse=True)
         size = (len(targets), len(divestitures))
@@ -124,27 +126,27 @@ class DivestitureCalculator(Logging):
         self.results(scope=scope, size=size, strings=strings, title="Calculated")
         return divestitures
 
-    def breakdown(self, targets):
-        boundary = self.boundary(targets)
-        survival = self.survival(targets)
-        multiple = f"Multiple >= {self.metrics.multiple:.2f} [{boundary.multiples.minimum:+.2f} -> {boundary.multiples.maximum:+.2f}, {survival.multiples:.0f}%]"
-        ratio = f"Ratio >= {self.metrics.ratio:.2f} [{boundary.ratios.minimum:+.2f} -> {boundary.ratios.maximum:+.2f}, {survival.ratios:.0f}%]"
-        return [multiple, ratio]
+#    def breakdown(self, targets):
+#        boundary = self.boundary(targets)
+#        survival = self.survival(targets)
+#        multiple = f"Multiple >= {self.metrics.multiple:.2f} [{boundary.multiples.minimum:+.2f} -> {boundary.multiples.maximum:+.2f}, {survival.multiples:.0f}%]"
+#        ratio = f"Ratio >= {self.metrics.ratio:.2f} [{boundary.ratios.minimum:+.2f} -> {boundary.ratios.maximum:+.2f}, {survival.ratios:.0f}%]"
+#        return [multiple, ratio]
 
-    def survival(self, targets):
-        multiples = [float(target.multiple) >= self.metrics.multiple for target in targets]
-        ratios = [float(target.ratio) >= self.metrics.ratio for target in targets]
-        multiples = sum(multiples) / len(multiples) * 100
-        ratios = sum(ratios) / len(ratios) * 100
-        return SimpleNamespace(multiples=multiples, ratios=ratios)
+#    def survival(self, targets):
+#        multiples = [float(target.multiple) >= self.metrics.multiple for target in targets]
+#        ratios = [float(target.ratio) >= self.metrics.ratio for target in targets]
+#        multiples = sum(multiples) / len(multiples) * 100
+#        ratios = sum(ratios) / len(ratios) * 100
+#        return SimpleNamespace(multiples=multiples, ratios=ratios)
 
-    @staticmethod
-    def boundary(targets):
-        multiples = [float(target.multiple) for target in targets]
-        ratios = [float(target.ratio) for target in targets]
-        multiples = NumberRange([min(multiples), max(multiples)])
-        ratios = NumberRange([min(ratios), max(ratios)])
-        return SimpleNamespace(multiples=multiples, ratios=ratios)
+#    @staticmethod
+#    def boundary(targets):
+#        multiples = [float(target.multiple) for target in targets]
+#        ratios = [float(target.ratio) for target in targets]
+#        multiples = NumberRange([min(multiples), max(multiples)])
+#        ratios = NumberRange([min(ratios), max(ratios)])
+#        return SimpleNamespace(multiples=multiples, ratios=ratios)
 
     @property
     def priority(self): return self.__priority

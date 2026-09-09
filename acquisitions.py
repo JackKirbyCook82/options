@@ -27,7 +27,9 @@ __license__ = "MIT License"
 
 @dataclass(frozen=True, slots=True)
 class Measure: zspread: float; multiple: float; ratio: float
-class Metric(Measure):
+
+@dataclass(frozen=True, slots=True)
+class Metrics(Measure):
     def __post_init__(self):
         assert self.zspread > 0
         assert self.multiple > 0
@@ -74,9 +76,9 @@ class Acquisition(Target):
     def pnl(self): return self.edge - self.cost
 
 
-class AcquisitionMetrics(Metric): pass
-class AcquisitionTargets(Metric): pass
-class AcquisitionWeights(Metric): pass
+class AcquisitionMetrics(Metrics): pass
+class AcquisitionTargets(Metrics): pass
+class AcquisitionWeights(Metrics): pass
 class AcquisitionPriority(Priority): pass
 class AcquisitionCalculator(Logging):
     def __init__(self, *args, metrics, priority, costing, **kwargs):
@@ -88,7 +90,7 @@ class AcquisitionCalculator(Logging):
     def __call__(self, prospects, /, **kwargs):
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])
         scope = self.scope(prospects, instrument=Instrument.SPREAD)
-        targets = [Acquisition.create(prospect) for prospect in prospects]
+        targets = [Acquisition.create(prospect, costing=self.costing) for prospect in prospects]
         acquisitions = [target for target in targets if self.metrics(target)]
         acquisitions.sort(key=self.priority, reverse=True)
         size = (len(targets), len(acquisitions))

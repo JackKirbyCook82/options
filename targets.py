@@ -81,12 +81,12 @@ class Target(Prospect, ABC):
     @property
     def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
     @property
-    def cost(self): return self.commissions + self.slippage
+    def cost(self): return float(self.commissions) + float(self.slippage)
     @property
-    def price(self): return self.market
+    def price(self): return float(self.market) * int(self.intent)
 
     @classmethod
-    def create(cls, prospect): return cls(prospect.spread, prospect.securities)
+    def create(cls, prospect, costing): return cls(prospect.spread, prospect.securities, costing=costing)
 
     @property
     @abstractmethod

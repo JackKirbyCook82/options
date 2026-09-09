@@ -19,7 +19,7 @@ from support.custom import NumberRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["OptionCalculator", "SanityFilter", "ViabilityFilter", "ViabilityMetric"]
+__all__ = ["OptionCalculator", "SanityFilter", "ViabilityFilter", "ViabilityMetrics"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -81,7 +81,7 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
         return filtered
 
 
-class ViabilityMetric(Metric): pass
+class ViabilityMetrics(Metric): pass
 class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": None, "active": None}):
     viability = lambda moneyed, tightened, activated: np.logical_and.reduce([moneyed, tightened, activated])
     moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
