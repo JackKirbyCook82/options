@@ -68,7 +68,9 @@ class Prospect(object):
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
     @property
-    def osi(self): return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
+    def osi(self):
+        try: return self.securities["osi"]
+        except KeyError: return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
 
     @property
     def gap(self): return (self.securities["gap"] * self.quantities).sum()

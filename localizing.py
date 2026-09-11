@@ -15,7 +15,9 @@ from types import SimpleNamespace
 from abc import ABC, abstractmethod
 
 from finance.enumerations import Instrument
+from finance.querys import Contract
 from finance.logging import Logging
+from finance.osi import OSI
 from support.custom import NumberRange
 
 __version__ = "1.0.0"
@@ -136,14 +138,13 @@ class LocalizingCalculator(Logging, ABC):
     @abstractmethod
     def generator(self, *args, **kwargs): pass
 
-#    @staticmethod
-#    def contained(proposed, proximity, key="osi"):
-#        assert key == "osi"
-#        if key in proposed.columns and key in proximity.columns:
-#            available = set(proposed[key].dropna())
-#            required = set(proximity[key].dropna())
-#            return required.issubset(available)
-#        return True
+    @staticmethod
+    def contained(proposed, proximity):
+        try: proposed, proximity = proposed["osi"], proximity["osi"]
+        except KeyError: proposed, proximity = proposed[list(Contract)].apply(OSI), proximity[list(Contract)].apply(OSI)
+        available = set(proposed["osi"].dropna())
+        required = set(proximity["osi"].dropna())
+        return required.issubset(available)
 
     @staticmethod
     def localize(dataframe, local):
@@ -214,29 +215,28 @@ class ProximityCalculator(LocalizingCalculator):
         assert isinstance(options, pd.DataFrame) and not options.empty
         assert isinstance(proximity, pd.DataFrame) and not proximity.empty
         options = self.cleaner(options)
-#        proximity = self.cleaner(proximity)
-#        proximity = self.calculator(options, proximity, **kwargs)
-#        scope = self.scope(proximity, instrument=Instrument.OPTION)
-#        self.results(scope=scope, size=len(proximity), title="Calculated")
-#        return proximity
+        proximity = self.calculator(options, proximity, **kwargs)
+        scope = self.scope(proximity, instrument=Instrument.OPTION)
+        self.results(scope=scope, size=len(proximity), title="Calculated")
+        return proximity
 
-#    def calculator(self, options, proximity, **kwargs):
-#        for local in self.generator(options, proximity, **kwargs):
-#            proposed = self.localize(options, local)
-#            if not self.adequate(proposed): continue
-#            if not self.contained(proposed, proximity): continue
-#            return proposed
-#        raise ProximityLocalizingError()
+    def calculator(self, options, proximity, **kwargs):
+        for local in self.generator(options, proximity, **kwargs):
+            proposed = self.localize(options, local)
+            if not self.adequate(proposed): continue
+            if not self.contained(proposed, proximity): continue
+            return proposed
+        raise ProximityLocalizingError()
 
-#    def generator(self, options, proximity, **kwargs):
-#        centers = self.centers(options)
-#        tauCenter = float(proximity["tau"].mean())
-#        maeCenter = float(proximity["mae"].mean())
-#        distances = np.abs(centers.tau.astype(float) - float(tauCenter))
-#        index = int(np.argmin(distances))
-#        for tau in self.taus(tauCenter, centers.tau, index=index):
-#            for mae in self.maes(maeCenter):
-#                yield Local(tau=tau, mae=mae)
+    def generator(self, options, proximity, **kwargs):
+        centers = self.centers(options)
+        tauCenter = float(proximity["tau"].mean())
+        maeCenter = float(proximity["mae"].mean())
+        distances = np.abs(centers.tau.astype(float) - float(tauCenter))
+        index = int(np.argmin(distances))
+        for tau in self.taus(tauCenter, centers.tau, index=index):
+            for mae in self.maes(maeCenter):
+                yield Local(tau=tau, mae=mae)
 
 
 
