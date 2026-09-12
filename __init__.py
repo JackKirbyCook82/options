@@ -32,16 +32,9 @@ class Measure:
 
 class Metric(Measure):
     def __post_init__(self):
-        assert self.moneyness > 0
-        assert self.tightness > 0
-        assert self.activity > 0
-
-    def __call__(self, measure):
-        assert isinstance(measure, Measure)
-        if abs(measure.moneyness) > self.moneyness: return False
-        if measure.tightness > self.tightness: return False
-        if measure.activity < self.activity: return False
-        return True
+        assert self.moneyness is not None and self.moneyness > 0
+        assert self.tightness is not None and self.tightness > 0
+        assert self.activity is not None and self.activity > 0
 
 
 class OptionCalculator(Logging, Equations, variables=["moneyness", "tightness", "activity", "market", "gap", "dte"]):
@@ -74,7 +67,6 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
         sanity = self.execute(options, **kwargs).squeeze()
-        self.scope(options, instrument=Instrument.OPTION)
         filtered = options.where(sanity["sanity"]).dropna(how="all", inplace=False)
         size = (len(options.index), len(filtered.index))
         self.results(scope=scope, size=size, title="Filtered")
@@ -82,12 +74,7 @@ class SanityFilter(Logging, Equations, parameters={"size": 1}):
 
 
 class ViabilityMetrics(Metric): pass
-class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": None, "active": None}):
-    viability = lambda moneyed, tightened, activated: np.logical_and.reduce([moneyed, tightened, activated])
-    moneyed = lambda moneyness, *, money: abs(moneyness) <= float(money) if money is not None else pd.Series(True, index=moneyness.index)
-    tightened = lambda tightness, *, tight: tightness <= float(tight) if tight is not None else pd.Series(True, index=tightness.index)
-    activated = lambda activity, *, active: activity >= float(active) if active is not None else pd.Series(True, index=activity.index)
-
+class ViabilityFilter(Logging):
     def __init__(self, *args, metric, **kwargs):
         parameters = dict(money=metric.moneyness, tight=metric.tightness, active=metric.activity)
         super().__init__(*args, **parameters, **kwargs)
@@ -97,11 +84,18 @@ class ViabilityFilter(Logging, Equations, parameters={"tight": None, "money": No
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
         viability = self.execute(options, **kwargs)
-        viable = options.where(viability["viability"]).dropna(how="all", inplace=False)
-        size = (len(options.index), len(viable.index))
+        filtered = options.where(viability["viability"]).dropna(how="all", inplace=False)
+        size = (len(options.index), len(filtered.index))
         strings = self.breakdown(options)
         self.results(scope=scope, size=size, strings=strings, title="Filtered")
-        return viable
+        return filtered
+
+    def execute(self, options, **kwargs):
+        moneyness = options["moneyness"].abs() <= self.metric.moneyness
+        tightness = options["tightness"] <= self.metric.tightness
+        activity = options["activity"] >= self.metric.activity
+        viability = np.logical_and.reduce([moneyness, tightness, activity])
+        return viability
 
     def breakdown(self, options):
         boundary = self.boundary(options)

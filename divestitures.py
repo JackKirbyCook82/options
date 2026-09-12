@@ -14,7 +14,7 @@ from dataclasses import dataclass, astuple
 
 from options.targets import Target
 from options.prospects import Prospect
-from finance.enumerations import Instrument, Intent
+from finance.enumerations import Instrument, Intent, Action
 from finance.logging import Logging
 from support.custom import NumberRange
 
@@ -66,18 +66,18 @@ class Priority:
 #        return math.exp(sum([function(*arguments) for arguments in generator]))
 
 
-class Divestiture(Target):
-    @property
-    def slippage(self): return max(self.liquidate, self.costing.slippage.exit * self.gap)
-    @property
-    def commissions(self): return self.costing.commissions * self.quantities.sum()
-    @property
-    def intent(self): return Intent.CLOSE
-
+class Divestiture(Target, columns="entry"):
     @cached_property
     def entry(self): return (self.securities["entry"] * self.positions.map(int) * self.quantities).sum()
+
+    @cached_property
+    def slippage(self): return max(self.liquidate, self.costing.slippage.exit * self.gap)
+    @cached_property
+    def commissions(self): return self.costing.commissions * self.quantities.sum()
     @cached_property
     def fees(self): return self.costing.commissions * self.quantities.sum()
+    @cached_property
+    def intent(self): return Intent.CLOSE
 
     @cached_property
     def multiple(self):

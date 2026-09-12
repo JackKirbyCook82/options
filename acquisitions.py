@@ -14,7 +14,7 @@ from dataclasses import dataclass, astuple
 
 from options.targets import Target
 from options.prospects import Prospect
-from finance.enumerations import Instrument, Intent
+from finance.enumerations import Instrument, Intent, Action
 from finance.logging import Logging
 from support.custom import NumberRange
 
@@ -58,11 +58,11 @@ class Priority:
 
 
 class Acquisition(Target):
-    @property
+    @cached_property
     def slippage(self): return (self.costing.slippage.entry + self.costing.slippage.exit) * self.gap
-    @property
+    @cached_property
     def commissions(self): return self.costing.commissions * self.quantities.sum() * 2
-    @property
+    @cached_property
     def intent(self): return Intent.OPEN
 
     @cached_property

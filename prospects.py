@@ -26,19 +26,50 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
-class Prospect(object):
-    def __init__(self, spread, securities):
+class ProspectError(Exception): pass
+class ProspectTickerError(ProspectError): pass
+class ProspectUnderlyingError(ProspectError): pass
+class ProspectVolatilityError(ProspectError): pass
+class ProspectColumnError(ProspectError): pass
+
+
+class ProspectMeta(type):
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        existing = getattr(cls, "columns", [])
+        updated = kwargs.get("columns", [])
+        if isinstance(updated, str): updated = str(updated).split(" ")
+        elif isinstance(updated, list): updated = list(updated)
+        else: raise TypeError(type(updated))
+        cls.columns = existing + updated
+
+    def __call__(cls, spread, securities):
         assert spread in list(Spread)
         assert isinstance(securities, pd.DataFrame)
-        assert len(securities["ticker"].unique()) == 1
-        assert len(securities["underlying"].unique()) == 1
-        assert len(securities["volatility"].unique()) == 1
+        for column in cls.columns:
+            if securities[column].isna().any(): raise ProspectColumnError()
+        instance = super().__call__(spread, securities)
+        return instance
+
+
+class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlying volatility forecast market zscore delta gamma theta vega gap tightness moneyness activity quantity position"]):
+    def __new__(cls, spread, securities):
+        assert spread in list(Spread)
+        assert isinstance(securities, pd.DataFrame)
+        if not len(securities["ticker"].unique()) == 1: raise ProspectTickerError()
+        if not len(securities["underlying"].unique()) == 1: raise ProspectUnderlyingError()
+        if not len(securities["volatility"].unique()) == 1: raise ProspectVolatilityError()
+        instance = super().__new__(cls)
+        return instance
+
+    def __init__(self, spread, securities):
         self.__ticker = securities["ticker"].unique()[0]
         self.__expires = DateRange(securities["expire"].to_list())
         self.__underlying = securities["underlying"].unique()[0]
         self.__volatility = securities["volatility"].unique()[0]
         self.__securities = securities
         self.__spread = spread
+        super().__init__()
 
     def __iter__(self):
         for osi, position, quantity in zip(self.osi, self.positions, self.quantities):

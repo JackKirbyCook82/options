@@ -12,6 +12,7 @@ from itertools import product
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from functools import cached_property
+from types import SimpleNamespace
 
 from finance.enumerations import Action
 from options.prospects import Prospect
@@ -54,7 +55,7 @@ class Risk:
     def vega(self, vpts): return self.greeks.vega * (vpts / 100)
 
 
-class Target(Prospect, ABC):
+class Target(Prospect, ABC, columns=["bid", "ask"]):
     def __init__(self, *args, costing, **kwargs):
         super().__init__(*args, **kwargs)
         assert isinstance(costing, Costing)
@@ -76,13 +77,19 @@ class Target(Prospect, ABC):
         worse = min([self.risk(scenario) for scenario in scenarios]) - self.cost
         return max(self.cost, - worse)
 
-    @property
+    @cached_property
+    def purpose(self): return [SimpleNamespace(action=action, intent=self.intent) for action in self.actions]
+    @cached_property
+    def actions(self): return self.positions.apply(lambda position: Action(int(self.intent) * int(position)))
+
+    @cached_property
     def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
-    @property
+    @cached_property
     def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
-    @property
+
+    @cached_property
     def cost(self): return float(self.commissions) + float(self.slippage)
-    @property
+    @cached_property
     def price(self): return float(self.market) * int(self.intent)
 
     @classmethod
