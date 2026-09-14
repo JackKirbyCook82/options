@@ -13,7 +13,8 @@ import pandas as pd
 from itertools import product
 
 from finance.enumerations import Instrument, Option
-from finance.logging import Logging
+from finance.reporting import Results
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -26,7 +27,7 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Logging):
+class ForwardCalculator(Results, Logging):
     def __init__(self, *args, tightness=0.15, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
@@ -37,7 +38,8 @@ class ForwardCalculator(Logging):
         scope = self.scope(options, instrument=Instrument.OPTION)
         options = self.calculate(options, **kwargs)
         options = options.sort_index(inplace=False)
-        self.results(scope=scope, size=len(options), title="Calculated")
+        results = self.results(scope=scope, size=len(options))
+        self.console("Calculated", results)
         return options
 
     def calculate(self, options, /, **kwargs):
@@ -64,17 +66,20 @@ class ForwardCalculator(Logging):
                 if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    self.console("Regression", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
+                    results = f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]"
+                    self.console("Regression", results)
                     yield options
                 else:
                     forwards = self.secondary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    self.console("AverageCarry", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
+                    results = f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]"
+                    self.console("AverageCarry", results)
                     yield options
             except ForwardSampleError:
                 forwards = self.tertiary(**constants, **kwargs)
                 options = options.assign(**forwards)
-                self.console("SingleCarry", f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]")
+                results = f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]"
+                self.console("SingleCarry", results)
                 yield options
 
     def primary(self, samples, weights, /, **kwargs):

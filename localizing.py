@@ -16,9 +16,10 @@ from abc import ABC, abstractmethod
 
 from finance.enumerations import Instrument
 from finance.querys import Contract
-from finance.logging import Logging
+from finance.reporting import Results
 from finance.osi import OSI
 from support.custom import NumberRange
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -87,7 +88,7 @@ class PartitionedLocalizingError(Exception): pass
 class ProximityLocalizingError(LocalizingError): pass
 
 
-class LocalizingCalculator(Logging, ABC):
+class LocalizingCalculator(Results, Logging, ABC):
     def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
@@ -188,7 +189,8 @@ class PartitionCalculator(LocalizingCalculator):
         options = self.cleaner(options)
         for partition in self.calculator(options, **kwargs):
             scope = self.scope(partition, instrument=Instrument.OPTION)
-            self.results(scope=scope, size=len(partition), title="Calculated")
+            results = self.results(scope=scope, size=len(partition))
+            self.console("Calculated", results)
             yield partition
 
     def calculator(self, options, **kwargs):
@@ -217,7 +219,8 @@ class ProximityCalculator(LocalizingCalculator):
         options = self.cleaner(options)
         proximity = self.calculator(options, proximity, **kwargs)
         scope = self.scope(proximity, instrument=Instrument.OPTION)
-        self.results(scope=scope, size=len(proximity), title="Calculated")
+        results = self.results(scope=scope, size=len(proximity))
+        self.console("Calculated", results)
         return proximity
 
     def calculator(self, options, proximity, **kwargs):

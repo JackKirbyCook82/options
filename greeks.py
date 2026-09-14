@@ -13,7 +13,8 @@ import pandas as pd
 from numba import njit
 
 from finance.enumerations import Instrument
-from finance.logging import Logging
+from finance.reporting import Results
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -142,7 +143,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 class GreekSignatureError(Exception): pass
 class GreekRequestingError(Exception): pass
-class GreekCalculator(Logging):
+class GreekCalculator(Results, Logging):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         calculated = ["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"]
@@ -168,7 +169,8 @@ class GreekCalculator(Logging):
         if bool(delimiter): greeks = {str(delimiter).join([prefix, key]): value for key, value in greeks.items()}
         greeks = pd.DataFrame(greeks, index=options.index)
         options = pd.concat([options, greeks], axis=1)
-        self.results(scope=scope, size=len(options), title="Calculated")
+        results = self.results(scope=scope, size=len(options))
+        self.console("Calculated", results)
         return options
 
     @property

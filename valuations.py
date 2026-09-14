@@ -13,7 +13,8 @@ import pandas as pd
 from numba import njit
 
 from finance.enumerations import Instrument
-from finance.logging import Logging
+from finance.reporting import Results
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -67,7 +68,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class ValuationSignatureError(Exception): pass
-class ValuationCalculator(Logging):
+class ValuationCalculator(Results, Logging):
     def __call__(self, options, /, interest, dividends, signature, **kwargs):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
@@ -80,7 +81,8 @@ class ValuationCalculator(Logging):
         try: τ = options["tau"].to_numpy(np.float64)
         except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
         options[valuation] = calculation(x, k, τ, σ, i, float(interest), float(dividends))
-        self.results(scope=scope, size=len(options), title="Calculated")
+        results = self.results(scope=scope, size=len(options))
+        self.console("Calculated", results)
         return options
 
 

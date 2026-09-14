@@ -13,7 +13,8 @@ import pandas as pd
 from numba import njit
 
 from finance.enumerations import Instrument
-from finance.logging import Logging
+from finance.reporting import Results
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -171,7 +172,7 @@ def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
 
 
 class VolatilitySignatureError(Exception): pass
-class VolatilityCalculator(Logging):
+class VolatilityCalculator(Results, Logging):
     def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
@@ -188,7 +189,8 @@ class VolatilityCalculator(Logging):
         try: τ = options["tau"].to_numpy(np.float64)
         except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
         options[volatility] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
-        self.results(scope=scope, size=len(options), title="Calculated")
+        results = self.results(scope=scope, size=len(options))
+        self.console("Calculated", results)
         return options
 
     @property

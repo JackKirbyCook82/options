@@ -13,11 +13,12 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 
 from finance.osi import OSI
-from finance.logging import Logging
+from finance.reporting import Results
 from finance.enumerations import Spread, Instrument, Position, Option
 from finance.specifications import Securities
 from support.meta import RegistryMeta
 from support.custom import DateRange
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -213,13 +214,14 @@ class CalendarProspectCreator(ProspectCreator, register=Spread.CALENDAR):
         return prospect
 
 
-class ProspectPortfolioCalculator(Logging):
+class ProspectPortfolioCalculator(Results, Logging):
     def __call__(self, holdings, /, **kwargs):
         assert isinstance(holdings, pd.DataFrame)
         scope = self.scope(holdings, instrument=Instrument.OPTION)
         generator = self.calculator(holdings, **kwargs)
         prospects = list(generator)
-        self.results(scope=scope, size=len(prospects), title="Calculated")
+        results = self.results(scope=scope, size=len(prospects))
+        self.console("Calculated", results)
         return prospects
 
     @staticmethod
@@ -228,7 +230,7 @@ class ProspectPortfolioCalculator(Logging):
             yield Prospect(spread, securities)
 
 
-class ProspectMarketCalculator(Logging):
+class ProspectMarketCalculator(Results, Logging):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
@@ -239,7 +241,8 @@ class ProspectMarketCalculator(Logging):
         scope = self.scope(options, instrument=Instrument.OPTION)
         generator = self.calculator(options, **kwargs)
         prospects = list(generator)
-        self.results(scope=scope, size=len(prospects), title="Calculated")
+        results = self.results(scope=scope, size=len(prospects))
+        self.console("Calculated", results)
         return prospects
 
     def calculator(self, options, /, **kwargs):

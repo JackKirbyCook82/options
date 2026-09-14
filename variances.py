@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from datetime import date as Date
 
 from finance.enumerations import Instrument
-from finance.logging import Logging
+from finance.reporting import Results
 from support.equations import Equations
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -58,7 +59,7 @@ class Neighborhood:
         return scale + 1e-12
 
 
-class VarianceCalculator(Logging, Equations):
+class VarianceCalculator(Results, Logging, Equations):
     tau = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days / 365
     mae = lambda forward, strike, option: np.log(forward / strike.astype(float)) * option.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
@@ -68,12 +69,13 @@ class VarianceCalculator(Logging, Equations):
         scope = self.scope(options, instrument=Instrument.OPTION)
         variance = self.execute(options, **kwargs)
         options = pd.concat([options, variance], axis=1)
-        self.results(scope=scope, size=len(options), title="Calculated")
+        results = self.results(scope=scope, size=len(options))
+        self.console("Calculated", results)
         return options
 
 
 class VarianceError(Exception): pass
-class VarianceScreener(Logging):
+class VarianceScreener(Results, Logging):
     def __init__(self, *args, neighbors=25, quantile=0.95, multiple=2.5, **kwargs):
         assert (0.0 < quantile < 1.0) and (multiple > 1.0)
         super().__init__(*args, **kwargs)
@@ -89,7 +91,8 @@ class VarianceScreener(Logging):
         options = options[mask].dropna(how="all", inplace=False)
         screened = self.screener(options)
         size = (len(options.index), len(screened.index))
-        self.results(scope=scope, size=size, title="Screened")
+        results = self.results(scope=scope, size=size)
+        self.console("Screened", results)
         return screened
 
     def screener(self, options):
@@ -114,7 +117,7 @@ class VarianceScreener(Logging):
     def multiple(self): return self.__multiple
 
 
-class VarianceStandardizer(Logging):
+class VarianceStandardizer(Results, Logging):
     def __init__(self, *args, neighbors, **kwargs):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
@@ -128,7 +131,8 @@ class VarianceStandardizer(Logging):
         standard = self.standardize(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="zscore", index=options.index)
         options = pd.concat([options, standard], axis=1)
-        self.results(scope=scope, size=len(options), title="Calculated")
+        results = self.results(scope=scope, size=len(options))
+        self.console("Calculated", results)
         return options
 
     def standardize(self, t, k, w, f):

@@ -14,14 +14,30 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from types import SimpleNamespace
 
-from finance.enumerations import Action
+from finance.enumerations import Instrument, Action
+from finance.reporting import Results, Analysis
 from options.prospects import Prospect
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["Target", "Costing", "Slippage"]
+__all__ = ["Target", "Calculator", "Costing", "Slippage", "Measure", "Metrics", "Priority"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass(frozen=True, slots=True)
+class Measure: zspread: float; multiple: float; ratio: float
+
+@dataclass(frozen=True, slots=True)
+class Priority: targets: Measure; weights: Measure
+
+@dataclass(frozen=True, slots=True)
+class Metrics(Measure):
+    def __post_init__(self):
+        assert self.zspread > 0
+        assert self.multiple > 0
+        assert self.ratio > 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,8 +108,19 @@ class Target(Prospect, ABC, columns=["bid", "ask"]):
     @cached_property
     def price(self): return float(self.market) * int(self.intent)
 
+    @cached_property
+    def multiple(self): return self.edge / self.cost
+    @cached_property
+    def ratio(self): return self.pnl / self.var
+
+    @cached_property
+    def edge(self): return self.forecast - self.market
+    @cached_property
+    def pnl(self): return self.edge - self.cost
+
     @classmethod
-    def create(cls, prospect, costing): return cls(prospect.spread, prospect.securities, costing=costing)
+    def create(cls, prospect, costing):
+        return cls(prospect.spread, prospect.securities, costing=costing)
 
     @property
     @abstractmethod
@@ -108,6 +135,38 @@ class Target(Prospect, ABC, columns=["bid", "ask"]):
     @property
     def costing(self): return self.__costing
 
+
+class Calculator(Analysis.Targets, Results, Logging, ABC):
+    def __init_subclass__(cls, /, target, **kwargs):
+        super().__init_subclass__()
+        cls.__target__ = target
+
+    def __init__(self, *args,  metrics, priority, costing, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__priority = priority
+        self.__metrics = metrics
+        self.__costing = costing
+
+    def __call__(self, prospects, **kwargs):
+        assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])
+        scope = self.scope(prospects, instrument=Instrument.SPREAD)
+        targets = [self.target.create(prospect, costing=self.costing) for prospect in prospects]
+        divestitures = [target for target in targets if self.metrics(target)]
+        divestitures.sort(key=self.priority, reverse=True)
+        size = (len(targets), len(divestitures))
+        results = self.results(scope, size)
+        analysis = self.analysis(targets) if bool(targets) else []
+        self.console("Calculated", results, *analysis)
+        return divestitures
+
+    @property
+    def target(self): return type(self).__target__
+    @property
+    def priority(self): return self.__priority
+    @property
+    def metrics(self): return self.__metrics
+    @property
+    def costing(self): return self.__costing
 
 
 
