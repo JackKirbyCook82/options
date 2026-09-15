@@ -10,7 +10,7 @@ Created on Mon Jul 6 2026
 from functools import cached_property
 
 from options.targets import Target, Calculator, Measure, Metrics, Priority
-from finance.enumerations import Intent
+from finance.enumerations import Intent, Action
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -47,6 +47,15 @@ class Divestiture(Target, columns="entry"):
     def fees(self): return self.costing.commissions * self.quantities.sum()
     @cached_property
     def intent(self): return Intent.CLOSE
+
+    @cached_property
+    def liquidate(self):
+        positions = self.positions.map(int).astype(int)
+        quantities = self.quantities.astype(float)
+        actions = positions * int(self.intent)
+        mask = actions.eq(int(Action.BUY))
+        prices = self.securities["ask"].where(mask, self.securities["bid"])
+        return abs((prices * positions * quantities).sum() - self.market)
 
 
 class DivestitureCalculator(Calculator, target=Divestiture):

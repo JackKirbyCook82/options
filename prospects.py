@@ -7,7 +7,9 @@ Created on Sat May 16 2026
 
 """
 
+import math
 import pandas as pd
+from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
@@ -25,6 +27,28 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["ProspectMarketCalculator", "ProspectPortfolioCalculator", "Prospect"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass(frozen=True, slots=True)
+class Greeks: delta: float; gamma: float; theta: float; vega: float
+
+@dataclass(frozen=True, slots=True)
+class Risk:
+    greeks: Greeks; underlying: float; volatility: float
+
+    def __call__(self, scenario):
+        shock = self.shock(scenario.zscore, scenario.tdays)
+        delta = self.delta(shock)
+        gamma = self.gamma(shock)
+        theta = self.theta(scenario.cdays)
+        vega = self.vega(scenario.vpts)
+        return delta + gamma + theta + vega
+
+    def shock(self, zscore, tdays): return zscore * self.underlying * self.volatility * math.sqrt(tdays / 252)
+    def delta(self, shock): return self.greeks.delta * (shock ** 1) / 1
+    def gamma(self, shock): return self.greeks.gamma * (shock ** 2) / 2
+    def theta(self, cdays): return self.greeks.theta * (cdays / 365)
+    def vega(self, vpts): return self.greeks.vega * (vpts / 100)
 
 
 class ProspectError(Exception): pass
@@ -76,11 +100,12 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
         for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
             yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
 
-    @cached_property
-    def zspread(self):
-        if self.spread is Spread.CALENDAR: return self.zscore / (self.quantities.sum() / 2)
-        elif self.spread is Spread.FLY: return self.zscore / (self.quantities.sum() / 2)
-        else: raise ValueError(self.spread)
+    @property
+    def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
+    @property
+    def osi(self):
+        try: return self.securities["osi"]
+        except KeyError: return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
 
     @cached_property
     def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
@@ -88,6 +113,7 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
     def market(self): return (self.securities["market"] * self.positions.map(int) * self.quantities).sum()
     @cached_property
     def zscore(self): return (self.securities["zscore"] * self.positions.map(int) * self.quantities).sum()
+
     @cached_property
     def delta(self): return (self.securities["delta"] * self.positions.map(int) * self.quantities).sum()
     @cached_property
@@ -97,12 +123,10 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
     @cached_property
     def vega(self): return (self.securities["vega"] * self.positions.map(int) * self.quantities).sum()
 
-    @property
-    def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
-    @property
-    def osi(self):
-        try: return self.securities["osi"]
-        except KeyError: return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
+    @cached_property
+    def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
+    @cached_property
+    def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
 
     @property
     def gap(self): return (self.securities["gap"] * self.quantities).sum()
