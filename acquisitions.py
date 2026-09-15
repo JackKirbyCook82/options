@@ -9,9 +9,9 @@ Created on Mon Jul 6 2026
 
 import math
 from functools import cached_property
-from dataclasses import astuple
+from dataclasses import dataclass, astuple
 
-from options.targets import Target, Calculator, Measure, Metrics, Priority
+from options.targets import Target, Calculator
 from finance.enumerations import Intent
 
 __version__ = "1.0.0"
@@ -21,21 +21,35 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
+@dataclass(frozen=True, slots=True)
+class Measure: zspread: float; multiple: float; ratio: float
+
+@dataclass(frozen=True, slots=True)
+class Priority: targets: Measure; weights: Measure
+
+@dataclass(frozen=True, slots=True)
+class Metrics(Measure):
+    def __post_init__(self):
+        assert self.zspread > 0
+        assert self.multiple > 0
+        assert self.ratio > 0
+
+
+class AcquisitionTargets(Metrics): pass
+class AcquisitionWeights(Metrics): pass
 class AcquisitionMetrics(Metrics):
     def __call__(self, prospect):
         assert isinstance(prospect, Acquisition)
-        if abs(prospect.zspread) <= self.zspread: return False
+        if prospect.zspread <= self.zspread: return False
         if prospect.multiple <= self.multiple: return False
         if prospect.ratio <= self.ratio: return False
         return True
 
 
-class AcquisitionTargets(Metrics): pass
-class AcquisitionWeights(Metrics): pass
 class AcquisitionPriority(Priority):
     def __call__(self, prospect):
         assert isinstance(prospect, Acquisition)
-        values = Measure(zspread=abs(prospect.zspread), multiple=prospect.multiple, ratio=prospect.ratio)
+        values = Measure(zspread=prospect.zspread, multiple=prospect.multiple, ratio=prospect.ratio)
         weights, total = astuple(self.weights), sum(astuple(self.weights))
         weights = (weight / total for weight in weights)
         generator = zip(astuple(values), astuple(self.targets), weights)

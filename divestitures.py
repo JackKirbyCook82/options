@@ -7,32 +7,37 @@ Created on Mon Jul 6 2026
 
 """
 
+from dataclasses import dataclass
 from functools import cached_property
 
-from options.targets import Target, Calculator, Measure, Metrics, Priority
+from options.targets import Target, Calculator
 from finance.enumerations import Intent, Action
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["DivestitureCalculator", "DivestitureMetrics", "DivestitureTargets", "DivestitureWeights", "DivestiturePriority"]
+__all__ = ["DivestitureCalculator", "DivestitureMetrics", "DivestiturePriority"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+@dataclass(frozen=True, slots=True)
+class Measure: pass
+
+@dataclass(frozen=True, slots=True)
+class Priority: pass
+
+@dataclass(frozen=True, slots=True)
+class Metrics(Measure): pass
 
 
 class DivestitureMetrics(Metrics):
     def __call__(self, prospect):
         assert isinstance(prospect, Divestiture)
-        if abs(prospect.zspread) <= self.zspread: return True
-        if prospect.multiple <= self.multiple: return True
-        if prospect.ratio <= self.ratio: return True
-        return False
 
 
-class DivestitureTargets(Measure): pass
-class DivestitureWeights(Measure): pass
 class DivestiturePriority(Priority):
     def __call__(self, prospect):
-        pass
+        assert isinstance(prospect, Divestiture)
 
 
 class Divestiture(Target, columns="entry"):

@@ -8,11 +8,13 @@ Created on Sat May 16 2026
 """
 
 import math
+import numpy as np
 import pandas as pd
 from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
+from datetime import date as Date
 
 from finance.osi import OSI
 from finance.reporting import Results
@@ -78,7 +80,7 @@ class ProspectMeta(type):
 
 
 class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlying volatility forecast market zscore delta gamma theta vega gap tightness moneyness activity quantity position"]):
-    def __new__(cls, spread, securities):
+    def __new__(cls, spread, securities, *args, **kwargs):
         assert spread in list(Spread)
         assert isinstance(securities, pd.DataFrame)
         if not len(securities["ticker"].unique()) == 1: raise ProspectTickerError()
@@ -87,7 +89,7 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
         instance = super().__new__(cls)
         return instance
 
-    def __init__(self, spread, securities):
+    def __init__(self, spread, securities, *args, **kwargs):
         self.__ticker = securities["ticker"].unique()[0]
         self.__expires = DateRange(securities["expire"].to_list())
         self.__underlying = securities["underlying"].unique()[0]
@@ -102,6 +104,8 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
+    @cached_property
+    def dte(self): return (self.expires.minimum - Date.today()).days
     @property
     def osi(self):
         try: return self.securities["osi"]
