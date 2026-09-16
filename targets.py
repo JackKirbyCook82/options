@@ -42,9 +42,9 @@ class Target(Prospect, ABC, columns=["bid", "ask"]):
         assert isinstance(scenarios, list)
         assert all([isinstance(scenario, Scenario) for scenario in scenarios])
         assert isinstance(costing, Costing)
-        self.__halflife = halflife
         self.__scenarios = scenarios
         self.__costing = costing
+        self.__halflife = halflife
 
     @cached_property
     def purpose(self): return [SimpleNamespace(action=action, intent=self.intent) for action in self.actions]
@@ -66,7 +66,7 @@ class Target(Prospect, ABC, columns=["bid", "ask"]):
     @cached_property
     def var(self): return max(0, - min([self.risk(scenario) for scenario in self.scenarios]))
     @cached_property
-    def factor(self): return 1 - np.power(2, - self.dte / self.halflife)
+    def factor(self): return 1 - np.exp(- self.dte / self.halflife)
 
     @cached_property
     def multiple(self): return self.edge / self.cost
@@ -95,11 +95,11 @@ class Target(Prospect, ABC, columns=["bid", "ask"]):
     def intent(self): pass
 
     @property
-    def halflife(self): return self.__halflife
-    @property
     def scenarios(self): return self.__scenarios
     @property
     def costing(self): return self.__costing
+    @property
+    def halflife(self): return self.__halflife
 
 
 class Calculator(Analysis.Targets, Results, Logging, ABC):

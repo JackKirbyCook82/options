@@ -62,6 +62,11 @@ class Divestiture(Target, columns="entry"):
         prices = self.securities["ask"].where(mask, self.securities["bid"])
         return abs((prices * positions * quantities).sum() - self.market)
 
+    @cached_property
+    def gained(self): return + max(self.entry - self.market - self.fees, 0)
+    @cached_property
+    def lost(self): return - min(self.entry - self.market - self.fees, 0)
+
 
 class DivestitureCalculator(Calculator, target=Divestiture):
     pass

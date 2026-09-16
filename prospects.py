@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
 from datetime import date as Date
+from datetime import timedelta as Timedelta
 
 from finance.osi import OSI
 from finance.reporting import Results
@@ -105,7 +106,7 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
     @cached_property
-    def dte(self): return (self.expires.minimum - Date.today()).days
+    def dte(self): return int(np.busday_count(Date.today() + Timedelta(days=1), self.expires.minimum + Timedelta(days=1)))
     @property
     def osi(self):
         try: return self.securities["osi"]
