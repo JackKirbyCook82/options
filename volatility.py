@@ -84,7 +84,7 @@ def vega(x, k, τ, σ, i, r, q):
 @njit(cache=True, inline="always")
 def adaptive(x, k, τ):
     xk = abs(math.log(x / k))
-    τ = max(τ, 1.0 / 365.0)
+    τ = max(τ, 1.0 / 252.0)
     return min(math.sqrt((10.0 + 2.0 * xk) / τ), 20.0)
 
 @njit(cache=True, inline="always")
@@ -186,8 +186,10 @@ class VolatilityCalculator(Results, Logging):
         y = options[valuation].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
-        try: τ = options["tau"].to_numpy(np.float64)
-        except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
+        try: τ = options["tau"].dropna(inplace=False).to_numpy()
+        except KeyError:
+            try: τ = options["trading"].dropna(inplace=False).to_numpy() / 252
+            except KeyError: τ = options["calender"].dropna(inplace=False).to_numpy() / 365
         options[volatility] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         results = self.results(scope=scope, size=len(options))
         self.console("Calculated", results)

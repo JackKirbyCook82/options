@@ -7,15 +7,9 @@ Created on Sat May 16 2026
 
 """
 
-import math
-import numpy as np
 import pandas as pd
-from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
-from functools import cached_property
-from datetime import date as Date
-from datetime import timedelta as Timedelta
 
 from finance.osi import OSI
 from finance.reporting import Results
@@ -30,28 +24,6 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["ProspectMarketCalculator", "ProspectPortfolioCalculator", "Prospect"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
-
-
-@dataclass(frozen=True, slots=True)
-class Greeks: delta: float; gamma: float; theta: float; vega: float
-
-@dataclass(frozen=True, slots=True)
-class Risk:
-    greeks: Greeks; underlying: float; volatility: float
-
-    def __call__(self, scenario):
-        shock = self.shock(scenario.zscore, scenario.tdays)
-        delta = self.delta(shock)
-        gamma = self.gamma(shock)
-        theta = self.theta(scenario.cdays)
-        vega = self.vega(scenario.vpts)
-        return delta + gamma + theta + vega
-
-    def shock(self, zscore, tdays): return zscore * self.underlying * self.volatility * math.sqrt(tdays / 252)
-    def delta(self, shock): return self.greeks.delta * (shock ** 1) / 1
-    def gamma(self, shock): return self.greeks.gamma * (shock ** 2) / 2
-    def theta(self, cdays): return self.greeks.theta * (cdays / 365)
-    def vega(self, vpts): return self.greeks.vega * (vpts / 100)
 
 
 class ProspectError(Exception): pass
@@ -80,7 +52,7 @@ class ProspectMeta(type):
         return instance
 
 
-class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlying volatility forecast market zscore delta gamma theta vega gap tightness moneyness activity quantity position"]):
+class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlying volatility quantity position"]):
     def __new__(cls, spread, securities, *args, **kwargs):
         assert spread in list(Spread)
         assert isinstance(securities, pd.DataFrame)
@@ -105,42 +77,10 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
 
     @property
     def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
-    @cached_property
-    def dte(self): return int(np.busday_count(Date.today() + Timedelta(days=1), self.expires.minimum + Timedelta(days=1)))
     @property
     def osi(self):
         try: return self.securities["osi"]
         except KeyError: return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
-
-    @cached_property
-    def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def market(self): return (self.securities["market"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def zscore(self): return (self.securities["zscore"] * self.positions.map(int) * self.quantities).sum()
-
-    @cached_property
-    def delta(self): return (self.securities["delta"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def gamma(self): return (self.securities["gamma"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def theta(self): return (self.securities["theta"] * self.positions.map(int) * self.quantities).sum()
-    @cached_property
-    def vega(self): return (self.securities["vega"] * self.positions.map(int) * self.quantities).sum()
-
-    @cached_property
-    def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
-    @cached_property
-    def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
-
-    @property
-    def gap(self): return (self.securities["gap"] * self.quantities).sum()
-    @property
-    def tightness(self): return self.securities["tightness"].max()
-    @property
-    def moneyness(self): return self.securities["moneyness"].max()
-    @property
-    def activity(self): return self.securities["activity"].min()
 
     @property
     def positions(self): return self.securities["position"]

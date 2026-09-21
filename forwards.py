@@ -55,7 +55,9 @@ class ForwardCalculator(Results, Logging):
         for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
             underlying = options["underlying"].dropna(inplace=False).to_numpy()
             try: tau = options["tau"].dropna(inplace=False).to_numpy()
-            except KeyError: tau = options["dte"].dropna(inplace=False).to_numpy() / 365
+            except KeyError:
+                try: tau = options["trading"].dropna(inplace=False).to_numpy() / 252
+                except KeyError: tau = options["calender"].dropna(inplace=False).to_numpy() / 365
             constants = dict(underlying=underlying[0], tau=tau[0])
             assert (tau[0] == tau).all() and (underlying[0] == underlying).all()
             try:

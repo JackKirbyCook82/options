@@ -161,8 +161,10 @@ class GreekCalculator(Results, Logging):
         k = options["strike"].to_numpy(np.float64)
         i = options["option"].apply(int).to_numpy(np.int8)
         σ = options[volatility].to_numpy(np.float64)
-        try: τ = options["tau"].to_numpy(np.float64)
-        except KeyError: τ = options["dte"].to_numpy(np.float64) / 365
+        try: τ = options["tau"].dropna(inplace=False).to_numpy()
+        except KeyError:
+            try: τ = options["trading"].dropna(inplace=False).to_numpy() / 252
+            except KeyError: τ = options["calender"].dropna(inplace=False).to_numpy() / 365
         calculated = list(calculation(x, k, τ, σ, i, float(interest), float(dividends)))
         calculated = dict(zip(self.calculated, calculated))
         greeks = {requested: calculated[requested] for requested in self.requesting}
