@@ -42,7 +42,7 @@ class Metrics(Measure):
         assert self.activity is not None and self.activity > 0
 
 
-class OptionCalculator(Results, Logging, Equations, variables=["moneyness", "tightness", "activity", "market", "gap", "dte"]):
+class OptionCalculator(Results, Logging, Equations, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
     trading = lambda expire: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(Date.today()) + pd.Timedelta(days=1), end_date=ending)))
     business = lambda expire: np.busday_count(np.datetime64(Date.today()) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
     calender = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
@@ -92,7 +92,7 @@ class ViabilityFilter(Analysis.Viability, Results, Logging):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
         viability = self.execute(options, **kwargs)
-        filtered = options.where(viability["viability"]).dropna(how="all", inplace=False)
+        filtered = options.where(viability).dropna(how="all", inplace=False)
         size = (len(options.index), len(filtered.index))
         results = self.results(scope=scope, size=size)
         analysis = self.analysis(options)
@@ -100,10 +100,10 @@ class ViabilityFilter(Analysis.Viability, Results, Logging):
         return filtered
 
     def execute(self, options, **kwargs):
-        moneyness = options["moneyness"].abs() <= self.metric.moneyness
-        tightness = options["tightness"] <= self.metric.tightness
-        activity = options["activity"] >= self.metric.activity
-        viability = np.logical_and.reduce([moneyness, tightness, activity])
+        moneyness = options["moneyness"].abs() <= self.metrics.moneyness
+        tightness = options["tightness"] <= self.metrics.tightness
+        activity = options["activity"] >= self.metrics.activity
+        viability = moneyness & tightness & activity
         return viability
 
     @property

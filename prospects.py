@@ -9,11 +9,12 @@ Created on Sat May 16 2026
 
 import pandas as pd
 from types import SimpleNamespace
-from abc import ABC, abstractmethod
+from functools import cached_property
+from abc import ABC, ABCMeta, abstractmethod
 
 from finance.osi import OSI
 from finance.reporting import Results
-from finance.enumerations import Spread, Instrument, Position, Option
+from finance.enumerations import Spread, Instrument, Position, Option, Action
 from finance.specifications import Securities
 from support.meta import RegistryMeta
 from support.custom import DateRange
@@ -33,7 +34,7 @@ class ProspectVolatilityError(ProspectError): pass
 class ProspectColumnError(ProspectError): pass
 
 
-class ProspectMeta(type):
+class ProspectMeta(ABCMeta):
     def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
         existing = getattr(cls, "columns", [])
@@ -43,16 +44,17 @@ class ProspectMeta(type):
         else: raise TypeError(type(updated))
         cls.columns = existing + updated
 
-    def __call__(cls, spread, securities):
+    def __call__(cls, spread, securities, *args, **kwargs):
         assert spread in list(Spread)
         assert isinstance(securities, pd.DataFrame)
         for column in cls.columns:
             if securities[column].isna().any(): raise ProspectColumnError()
-        instance = super().__call__(spread, securities)
+        instance = super().__call__(spread, securities, *args, **kwargs)
         return instance
 
 
-class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlying volatility quantity position"]):
+class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying volatility quantity position"):
+    def __init_subclass__(cls, **kwargs): pass
     def __new__(cls, spread, securities, *args, **kwargs):
         assert spread in list(Spread)
         assert isinstance(securities, pd.DataFrame)
@@ -72,20 +74,29 @@ class Prospect(object, metaclass=ProspectMeta, columns=["ticker expire underlyin
         super().__init__()
 
     def __iter__(self):
-        for osi, position, quantity in zip(self.osi, self.positions, self.quantities):
-            yield SimpleNamespace(osi=osi, position=position, quantity=quantity)
+        for osi, purpose, position, quantity in zip(self.osi, self.purpose, self.positions, self.quantities):
+            yield SimpleNamespace(osi=osi, purpose=purpose, position=position, quantity=quantity)
 
     @property
-    def signature(self): return tuple((str(record.osi), int(record.position), int(record.quantity)) for record in self)
+    def signature(self): return tuple((str(record.osi), int(record.action), int(record.intent), int(record.position), int(record.quantity)) for record in self)
     @property
     def osi(self):
         try: return self.securities["osi"]
         except KeyError: return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
 
+    @cached_property
+    def purpose(self): return [SimpleNamespace(action=action, intent=self.intent) for action in self.actions]
+    @cached_property
+    def actions(self): return self.positions.apply(lambda position: Action(int(self.intent) * int(position)))
+
     @property
     def positions(self): return self.securities["position"]
     @property
     def quantities(self): return self.securities["quantity"]
+
+    @property
+    @abstractmethod
+    def intent(self): pass
 
     @property
     def securities(self): return self.__securities

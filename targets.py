@@ -11,14 +11,13 @@ import math
 import numpy as np
 import pandas_market_calendars as calenders
 from typing import Optional
-from types import SimpleNamespace
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from functools import cached_property
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 
-from finance.enumerations import Spread, Instrument, Action
+from finance.enumerations import Spread, Instrument
 from finance.reporting import Results, Analysis
 from options.prospects import Prospect
 from support.mixins import Logging
@@ -105,11 +104,6 @@ class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightne
     def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
 
     @cached_property
-    def purpose(self): return [SimpleNamespace(action=action, intent=self.intent) for action in self.actions]
-    @cached_property
-    def actions(self): return self.positions.apply(lambda position: Action(int(self.intent) * int(position)))
-
-    @cached_property
     def zspread(self):
         if self.spread is Spread.CALENDAR: zspread = self.zscore / (self.quantities.sum() / 2)
         elif self.spread is Spread.FLY: zspread = self.zscore / (self.quantities.sum() / 2)
@@ -148,9 +142,6 @@ class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightne
     @property
     @abstractmethod
     def slippage(self): pass
-    @property
-    @abstractmethod
-    def intent(self): pass
 
     @property
     def scenarios(self): return self.__scenarios
@@ -176,7 +167,7 @@ class Calculator(Analysis.Targets, Results, Logging, ABC):
     def __call__(self, prospects, **kwargs):
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])
         scope = self.scope(prospects, instrument=Instrument.SPREAD)
-        parameters = dict(costing=self.costing, scenarios=self.scenario, halflife=self.halflife)
+        parameters = dict(costing=self.costing, scenarios=self.scenarios, halflife=self.halflife)
         targets = [self.target.create(prospect, **parameters) for prospect in prospects]
         divestitures = [target for target in targets if self.metrics(target)]
         divestitures.sort(key=self.priority, reverse=True)
