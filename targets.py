@@ -111,19 +111,21 @@ class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightne
         return abs(zspread) * self.factor
 
     @cached_property
-    def factor(self): return 1 - np.exp(- len(nyse.valid_days(start_date=Date.today() + Timedelta(days=1), end_date=self.expires.minimum)) / self.halflife)
+    def factor(self): return 1 - np.power(2, - self.dte / self.halflife)
     @cached_property
-    def var(self): return max(0, - min([self.risk(scenario) for scenario in self.scenarios]))
+    def dte(self): return len(nyse.valid_days(start_date=Date.today() + Timedelta(days=1), end_date=self.expires.minimum))
+    @cached_property
+    def loss(self): return max(0, - min([self.risk(scenario) for scenario in self.scenarios]))
 
     @cached_property
     def cost(self): return float(self.commissions) + float(self.slippage)
     @cached_property
-    def price(self): return float(self.market) * int(self.intent)
+    def price(self): return float(self.market)
 
     @cached_property
     def multiple(self): return self.edge / max(self.cost, 1e-4)
     @cached_property
-    def ratio(self): return self.pnl / max(self.var, 1e-2)
+    def ratio(self): return self.pnl / max(self.loss, 1e-2)
 
     @cached_property
     def edge(self): return (self.forecast - self.market) * self.factor

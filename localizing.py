@@ -88,12 +88,12 @@ class ProximityLocalizingError(LocalizingError): pass
 
 
 class LocalizingCalculator(Results, Logging, ABC):
-    def __init__(self, *args, localizing, samples=35, overlap=0.80, **kwargs):
+    def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
         self.__localizing = localizing
         self.__overlap = float(overlap)
-        self.__samples = int(samples)
+        self.__quality = int(quality)
 
     def centers(self, dataframe):
         taus = np.sort(dataframe["tau"].unique().astype(float))
@@ -122,7 +122,7 @@ class LocalizingCalculator(Results, Logging, ABC):
     def adequate(self, proposed):
         tau = proposed["tau"].nunique() >= self.localizing.taus.coverage
         mae = proposed["mae"].nunique() >= self.localizing.maes.coverage
-        return (len(proposed) >= self.samples) and tau and mae
+        return (len(proposed) >= self.quality) and tau and mae
 
     def similar(self, proposed, history):
         current = set(proposed.index)
@@ -177,7 +177,7 @@ class LocalizingCalculator(Results, Logging, ABC):
     @property
     def localizing(self): return self.__localizing
     @property
-    def samples(self): return self.__samples
+    def quality(self): return self.__quality
     @property
     def overlap(self): return self.__overlap
 

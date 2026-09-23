@@ -97,13 +97,13 @@ class ForwardCalculator(Results, Logging):
         forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
         try: forward = np.average(forwards, weights=weights)
         except ZeroDivisionError: raise ForwardSampleError()
-        return dict(forward=forward, discount=discount, error=np.NaN)
+        return dict(forward=forward, discount=discount, error=np.nan)
 
     @staticmethod
     def tertiary(underlying, tau, interest, dividends, **kwargs):
         discount = np.exp(tau * (interest - dividends))
         forward = underlying * discount
-        return dict(forward=forward, discount=discount, error=np.NaN)
+        return dict(forward=forward, discount=discount, error=np.nan)
 
     @staticmethod
     def samples(options, /, **kwargs):

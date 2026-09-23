@@ -8,6 +8,7 @@ Created on Mon Jul 6 2026
 """
 
 import math
+import numpy as np
 from functools import cached_property
 from dataclasses import dataclass, astuple
 
@@ -30,9 +31,9 @@ class Priority: targets: Measure; weights: Measure
 @dataclass(frozen=True, slots=True)
 class Metrics(Measure):
     def __post_init__(self):
-        assert self.zspread > 0
-        assert self.multiple > 0
-        assert self.ratio > 0
+        assert not np.isnan(self.zspread) and self.zspread > 0
+        assert not np.isnan(self.multiple) and self.multiple > 0
+        assert not np.isnan(self.ratio) and self.ratio > 0
 
 
 class AcquisitionTargets(Metrics): pass
@@ -40,6 +41,9 @@ class AcquisitionWeights(Metrics): pass
 class AcquisitionMetrics(Metrics):
     def __call__(self, prospect):
         assert isinstance(prospect, Acquisition)
+        assert not np.isnan(prospect.zspread)
+        assert not np.isnan(prospect.multiple)
+        assert not np.isnan(prospect.ratio)
         if prospect.zspread <= self.zspread: return False
         if prospect.multiple <= self.multiple: return False
         if prospect.ratio <= self.ratio: return False
