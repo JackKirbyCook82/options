@@ -74,8 +74,8 @@ class SanityFilter(Results, Logging, Equations, parameters={"size": 1}):
     def __call__(self, options, **kwargs):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
-        sanity = self.execute(options, **kwargs).squeeze()
-        filtered = options.where(sanity["sanity"]).dropna(how="all", inplace=False)
+        sanity = self.execute(options, **kwargs)["sanity"]
+        filtered = options.where(sanity).dropna(how="all", inplace=False)
         size = (len(options.index), len(filtered.index))
         results = self.results(scope=scope, size=size)
         self.console("Filtered", results)

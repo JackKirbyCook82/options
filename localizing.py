@@ -57,7 +57,7 @@ class Local: tau: Tau; mae: Mae
 
 
 @dataclass(frozen=True)
-class Taus: windows: Windows; coverage: int = 3; limit: float = 45 / 365
+class Taus: windows: Windows; coverage: int = 3; limit: float = 45 / 252
 
 @dataclass(frozen=True)
 class Maes: radii: Radii; coverage: int = 10

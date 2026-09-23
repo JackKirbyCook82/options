@@ -8,14 +8,13 @@ Created on Sat May 16 2026
 """
 
 import pandas as pd
+from dataclasses import dataclass
 from types import SimpleNamespace
-from functools import cached_property
 from abc import ABC, ABCMeta, abstractmethod
 
 from finance.osi import OSI
 from finance.reporting import Results
-from finance.enumerations import Spread, Instrument, Position, Option, Action
-from finance.specifications import Securities
+from finance.enumerations import Spread, Instrument, Position, Option
 from support.meta import RegistryMeta
 from support.custom import DateRange
 from support.mixins import Logging
@@ -27,6 +26,14 @@ __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
 
+@dataclass(frozen=True, slots=True)
+class Security:
+    instrument: Instrument; option: Option; position: Position
+
+    @property
+    def key(self): return self.instrument, self.option, self.position
+
+
 class ProspectError(Exception): pass
 class ProspectTickerError(ProspectError): pass
 class ProspectUnderlyingError(ProspectError): pass
@@ -35,6 +42,10 @@ class ProspectColumnError(ProspectError): pass
 
 
 class ProspectMeta(ABCMeta):
+    def __new__(mcs, name, bases, attrs, **kwargs):
+        cls = super().__new__(mcs, name, bases, attrs)
+        return cls
+
     def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
         existing = getattr(cls, "columns", [])
@@ -54,7 +65,6 @@ class ProspectMeta(ABCMeta):
 
 
 class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying volatility quantity position"):
-    def __init_subclass__(cls, **kwargs): pass
     def __new__(cls, spread, securities, *args, **kwargs):
         assert spread in list(Spread)
         assert isinstance(securities, pd.DataFrame)
@@ -73,30 +83,15 @@ class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying vo
         self.__spread = spread
         super().__init__()
 
-    def __iter__(self):
-        for osi, purpose, position, quantity in zip(self.osi, self.purpose, self.positions, self.quantities):
-            yield SimpleNamespace(osi=osi, purpose=purpose, position=position, quantity=quantity)
-
-    @property
-    def signature(self): return tuple((str(record.osi), int(record.action), int(record.intent), int(record.position), int(record.quantity)) for record in self)
     @property
     def osi(self):
         try: return self.securities["osi"]
         except KeyError: return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
 
-    @cached_property
-    def purpose(self): return [SimpleNamespace(action=action, intent=self.intent) for action in self.actions]
-    @cached_property
-    def actions(self): return self.positions.apply(lambda position: Action(int(self.intent) * int(position)))
-
     @property
     def positions(self): return self.securities["position"]
     @property
     def quantities(self): return self.securities["quantity"]
-
-    @property
-    @abstractmethod
-    def intent(self): pass
 
     @property
     def securities(self): return self.__securities
@@ -129,9 +124,7 @@ class ProspectCreator(ABC, metaclass=RegistryMeta):
         for position in iter(Position):
             for option in iter(Option):
                 if option is Option.EMPTY: continue
-                if position is Position.EMPTY: continue
-                security = [Instrument.OPTION, option, position]
-                security = Securities(tuple(security))
+                security = Security(Instrument.OPTION, option, position)
                 dataframe = options[options["option"].eq(option)]
                 yield security, dataframe
 
@@ -150,7 +143,7 @@ class FlyProspectCreator(ProspectCreator, register=Spread.FLY):
     @staticmethod
     def organize(securities):
         for security, dataframes in securities:
-            for dte, dataframe in dataframes.groupby("dte"):
+            for expire, dataframe in dataframes.groupby("expire"):
                 dataframe = dataframe.sort_values("strike")
                 yield security, dataframe
 
@@ -175,7 +168,7 @@ class CalendarProspectCreator(ProspectCreator, register=Spread.CALENDAR):
     def organize(securities):
         for security, dataframes in securities:
             for strike, dataframe in dataframes.groupby("strike"):
-                dataframe = dataframe.sort_values("dte")
+                dataframe = dataframe.sort_values("expire")
                 yield security, dataframe
 
     @staticmethod

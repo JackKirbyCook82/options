@@ -41,9 +41,9 @@ class AcquisitionWeights(Metrics): pass
 class AcquisitionMetrics(Metrics):
     def __call__(self, prospect):
         assert isinstance(prospect, Acquisition)
-        assert not np.isnan(prospect.zspread)
-        assert not np.isnan(prospect.multiple)
-        assert not np.isnan(prospect.ratio)
+        if not np.isfinite(prospect.zspread): return False
+        if not np.isfinite(prospect.multiple): return False
+        if not np.isfinite(prospect.ratio): return False
         if prospect.zspread <= self.zspread: return False
         if prospect.multiple <= self.multiple: return False
         if prospect.ratio <= self.ratio: return False

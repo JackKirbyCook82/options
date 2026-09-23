@@ -92,8 +92,8 @@ class ForwardCalculator(Results, Logging):
         return dict(forward=forward, discount=discount, error=error)
 
     @staticmethod
-    def secondary(samples, weights, /, tau, interest, dividends, **kwargs):
-        discount = np.exp(tau * (interest - dividends))
+    def secondary(samples, weights, /, tau, interest, **kwargs):
+        discount = np.exp(- interest * tau)
         forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
         try: forward = np.average(forwards, weights=weights)
         except ZeroDivisionError: raise ForwardSampleError()
@@ -101,8 +101,8 @@ class ForwardCalculator(Results, Logging):
 
     @staticmethod
     def tertiary(underlying, tau, interest, dividends, **kwargs):
-        discount = np.exp(tau * (interest - dividends))
-        forward = underlying * discount
+        discount = np.exp(- interest * tau)
+        forward = underlying * np.exp((interest - dividends) * tau)
         return dict(forward=forward, discount=discount, error=np.nan)
 
     @staticmethod

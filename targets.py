@@ -12,12 +12,13 @@ import numpy as np
 import pandas_market_calendars as calenders
 from typing import Optional
 from dataclasses import dataclass
+from types import SimpleNamespace
 from abc import ABC, abstractmethod
 from functools import cached_property
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 
-from finance.enumerations import Spread, Instrument
+from finance.enumerations import Spread, Instrument, Action
 from finance.reporting import Results, Analysis
 from options.prospects import Prospect
 from support.mixins import Logging
@@ -63,7 +64,7 @@ class Risk:
     def vega(self, vpts): return self.greeks.vega * (vpts / 100)
 
 
-class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightness moneyness activity delta gamma theta vega"]):
+class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightness moneyness activity delta gamma theta vega"):
     def __init__(self, *args, scenarios, costing, halflife, **kwargs):
         super().__init__(*args, **kwargs)
         assert isinstance(scenarios, list)
@@ -72,6 +73,15 @@ class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightne
         self.__scenarios = scenarios
         self.__halflife = halflife
         self.__costing = costing
+
+    def __iter__(self):
+        for osi, purpose, position, quantity in zip(self.osi, self.purpose, self.positions, self.quantities):
+            yield SimpleNamespace(osi=osi, purpose=purpose, position=position, quantity=quantity)
+
+    @property
+    def signature(self):
+        function = lambda record: (str(record.osi), int(record.purpose.action), int(record.purpose.intent), int(record.position), int(record.quantity))
+        return tuple(function(record) for record in self)
 
     @cached_property
     def forecast(self): return (self.securities["forecast"] * self.positions.map(int) * self.quantities).sum()
@@ -99,6 +109,11 @@ class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightne
     def activity(self): return self.securities["activity"].min()
 
     @cached_property
+    def purpose(self): return [SimpleNamespace(action=action, intent=self.intent) for action in self.actions]
+    @cached_property
+    def actions(self): return self.positions.apply(lambda position: Action(int(self.intent) * int(position)))
+
+    @cached_property
     def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
     @cached_property
     def risk(self): return Risk(greeks=self.greeks, underlying=self.underlying, volatility=self.volatility)
@@ -120,7 +135,7 @@ class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightne
     @cached_property
     def cost(self): return float(self.commissions) + float(self.slippage)
     @cached_property
-    def price(self): return float(self.market)
+    def price(self): return float(self.market) * int(self.intent)
 
     @cached_property
     def multiple(self): return self.edge / max(self.cost, 1e-4)
@@ -144,6 +159,9 @@ class Target(Prospect, ABC, columns=["forecast market zscore bid ask gap tightne
     @property
     @abstractmethod
     def slippage(self): pass
+    @property
+    @abstractmethod
+    def intent(self): pass
 
     @property
     def scenarios(self): return self.__scenarios
@@ -171,6 +189,7 @@ class Calculator(Analysis.Targets, Results, Logging, ABC):
         scope = self.scope(prospects, instrument=Instrument.SPREAD)
         parameters = dict(costing=self.costing, scenarios=self.scenarios, halflife=self.halflife)
         targets = [self.target.create(prospect, **parameters) for prospect in prospects]
+        if not bool(targets): return targets
         divestitures = [target for target in targets if self.metrics(target)]
         divestitures.sort(key=self.priority, reverse=True)
         size = (len(targets), len(divestitures))
