@@ -9,7 +9,6 @@ Created on Sat May 16 2026
 
 import pandas as pd
 from dataclasses import dataclass
-from types import SimpleNamespace
 from abc import ABC, ABCMeta, abstractmethod
 
 from finance.osi import OSI

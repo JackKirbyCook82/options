@@ -10,7 +10,7 @@ Created on Tues Mar 24 2026
 import inspect
 import numpy as np
 import pandas as pd
-from itertools import product
+from itertools import product as iterprod
 
 from finance.enumerations import Instrument, Option
 from finance.reporting import Results
@@ -109,7 +109,7 @@ class ForwardCalculator(Results, Logging):
     def samples(options, /, **kwargs):
         samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["market", "gap", "supply", "demand"], sort=False).sort_index()
         if set(Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
-        validity = [samples[index].notna() for index in list(product(["market", "gap"], list(Option)))]
+        validity = [samples[index].notna() for index in list(iterprod(["market", "gap"], list(Option)))]
         samples = samples[np.logical_and.reduce(validity)]
         difference = (samples["market", Option.CALL] - samples["market", Option.PUT]).rename("difference")
         supply = (samples["supply", Option.CALL] + samples["supply", Option.PUT]).rename("supply")
