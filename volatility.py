@@ -185,7 +185,7 @@ class VolatilityCalculator(Results, Logging):
         x = options["underlying"].to_numpy(np.float64)
         y = options[valuation].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
-        i = options["option"].apply(int).to_numpy(np.int8)
+        i = options["right"].apply(int).to_numpy(np.int8)
         try: τ = options["tau"].dropna(inplace=False).to_numpy()
         except KeyError:
             try: τ = options["trading"].dropna(inplace=False).to_numpy() / 252

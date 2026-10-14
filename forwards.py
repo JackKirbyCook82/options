@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from itertools import product as iterprod
 
-from finance.enumerations import Instrument, Option
+from finance.enumerations import Instrument, Right
 from finance.reporting import Results
 from support.mixins import Logging
 
@@ -107,15 +107,15 @@ class ForwardCalculator(Results, Logging):
 
     @staticmethod
     def samples(options, /, **kwargs):
-        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="option", values=["market", "gap", "supply", "demand"], sort=False).sort_index()
-        if set(Option) - set(samples.columns.get_level_values("option")): raise ForwardSampleError()
-        validity = [samples[index].notna() for index in list(iterprod(["market", "gap"], list(Option)))]
+        samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="right", values=["market", "gap", "supply", "demand"], sort=False).sort_index()
+        if set(Right) - set(samples.columns.get_level_values("right")): raise ForwardSampleError()
+        validity = [samples[index].notna() for index in list(iterprod(["market", "gap"], list(Right)))]
         samples = samples[np.logical_and.reduce(validity)]
-        difference = (samples["market", Option.CALL] - samples["market", Option.PUT]).rename("difference")
-        supply = (samples["supply", Option.CALL] + samples["supply", Option.PUT]).rename("supply")
-        demand = (samples["demand", Option.CALL] + samples["demand", Option.PUT]).rename("demand")
-        market = (samples["market", Option.CALL] + samples["market", Option.PUT]).rename("market")
-        gap = (samples["gap", Option.CALL] + samples["gap", Option.PUT]).rename("gap")
+        difference = (samples["market", Right.CALL] - samples["market", Right.PUT]).rename("difference")
+        supply = (samples["supply", Right.CALL] + samples["supply", Right.PUT]).rename("supply")
+        demand = (samples["demand", Right.CALL] + samples["demand", Right.PUT]).rename("demand")
+        market = (samples["market", Right.CALL] + samples["market", Right.PUT]).rename("market")
+        gap = (samples["gap", Right.CALL] + samples["gap", Right.PUT]).rename("gap")
         strike = samples.index.get_level_values("strike").to_series(index=samples.index)
         samples = pd.concat([strike, difference, market, gap, supply, demand], axis=1)
         samples = samples.reset_index(drop=True, inplace=False)

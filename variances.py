@@ -65,7 +65,7 @@ class Neighborhood:
 
 class VarianceCalculator(Results, Logging, Equations):
     tau = lambda expire: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(Date.today()) + pd.Timedelta(days=1), end_date=ending))) / 252
-    mae = lambda forward, strike, option: np.log(forward / strike.astype(float)) * option.astype(int)
+    mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
     def __call__(self, options, /, **kwargs):

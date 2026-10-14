@@ -13,7 +13,7 @@ from abc import ABC, ABCMeta, abstractmethod
 
 from finance.osi import OSI
 from finance.reporting import Results
-from finance.enumerations import Spread, Instrument, Position, Option
+from finance.enumerations import Spread, Instrument, Position, Right
 from support.meta import RegistryMeta
 from support.custom import DateRange
 from support.mixins import Logging
@@ -27,10 +27,10 @@ __license__ = "MIT License"
 
 @dataclass(frozen=True, slots=True)
 class Security:
-    instrument: Instrument; option: Option; position: Position
+    instrument: Instrument; right: Right; position: Position
 
     @property
-    def key(self): return self.instrument, self.option, self.position
+    def key(self): return self.instrument, self.right, self.position
 
 
 class ProspectError(Exception): pass
@@ -85,7 +85,7 @@ class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying vo
     @property
     def osi(self):
         try: return self.securities["osi"]
-        except KeyError: return self.securities[["ticker", "expire", "option", "strike"]].apply(OSI, axis=1)
+        except KeyError: return self.securities[["ticker", "expire", "right", "strike"]].apply(OSI, axis=1)
 
     @property
     def positions(self): return self.securities["position"]
@@ -121,10 +121,9 @@ class ProspectCreator(ABC, metaclass=RegistryMeta):
     @staticmethod
     def securities(options):
         for position in iter(Position):
-            for option in iter(Option):
-                if option is Option.EMPTY: continue
-                security = Security(Instrument.OPTION, option, position)
-                dataframe = options[options["option"].eq(option)]
+            for right in iter(Right):
+                security = Security(Instrument.OPTION, right, position)
+                dataframe = options[options["right"].eq(right)]
                 yield security, dataframe
 
     @staticmethod

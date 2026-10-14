@@ -159,7 +159,7 @@ class GreekCalculator(Results, Logging):
         except AttributeError: raise GreekSignatureError()
         x = options["underlying"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
-        i = options["option"].apply(int).to_numpy(np.int8)
+        i = options["right"].apply(int).to_numpy(np.int8)
         σ = options[volatility].to_numpy(np.float64)
         try: τ = options["tau"].dropna(inplace=False).to_numpy()
         except KeyError:
