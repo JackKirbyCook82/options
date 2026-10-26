@@ -45,9 +45,9 @@ class ForwardCalculator(Results, Logging):
     def calculate(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         generator = self.calculator(options, **kwargs)
-        options = list(generator)
-        if bool(options): options = pd.concat(options, axis=0)
-        else: options = pd.DataFrame(columns=options.columns)
+        results = list(generator)
+        if bool(results): options = pd.concat(results, axis=0)
+        else: results = pd.DataFrame(columns=options.columns)
         return options
 
     def calculator(self, options, /, **kwargs):
