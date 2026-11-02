@@ -10,7 +10,6 @@ Created on Mon Mar 23 2026
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-from datetime import date as Date
 import pandas_market_calendars as calenders
 
 from finance.enumerations import Instrument
@@ -43,9 +42,9 @@ class Metrics(Measure):
 
 
 class OptionCalculator(Results, Logging, DataframeEquation, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
-    trading = lambda expire: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(Date.today()) + pd.Timedelta(days=1), end_date=ending)))
-    business = lambda expire: np.busday_count(np.datetime64(Date.today()) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
-    calender = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days
+    trading = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending)))
+    business = lambda expire, today: np.busday_count(np.datetime64(today) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
+    calender = lambda expire, today: (pd.to_datetime(expire) - pd.Timestamp(today)).dt.days
     moneyness = lambda underlying, strike, option: np.log(underlying / strike.astype(float)) * option.astype(int)
     activity = lambda supply, demand: np.minimum(supply, demand) / (np.maximum(supply, demand) + 10)
     tightness = lambda gap, market: gap / market
@@ -63,7 +62,7 @@ class OptionCalculator(Results, Logging, DataframeEquation, variables=["moneynes
         return options
 
 
-class SanityFilter(Results, Logging, DataframeEquation, parameters={"size": 1}):
+class SanityFilter(Results, Logging, DataframeEquation, defaults={"size": 1}):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
     supplied = lambda supply, *, size: supply.notna() & (supply >= size)
     demanded = lambda demand, *, size: demand.notna() & (demand >= size)

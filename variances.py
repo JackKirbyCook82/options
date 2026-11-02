@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import cKDTree
 from dataclasses import dataclass
-from datetime import date as Date
 import pandas_market_calendars as calenders
 
 from finance.enumerations import Instrument
@@ -64,7 +63,7 @@ class Neighborhood:
 
 
 class VarianceCalculator(Results, Logging, DataframeEquation):
-    tau = lambda expire: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(Date.today()) + pd.Timedelta(days=1), end_date=ending))) / 252
+    tau = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending))) / 252
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
