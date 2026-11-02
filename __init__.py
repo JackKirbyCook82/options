@@ -15,7 +15,7 @@ import pandas_market_calendars as calenders
 
 from finance.enumerations import Instrument
 from finance.reporting import Results, Analysis
-from support.equations import Equations
+from support.equations import DataframeEquation
 from support.custom import NumberRange
 from support.mixins import Logging
 
@@ -42,7 +42,7 @@ class Metrics(Measure):
         assert self.activity is not None and self.activity > 0
 
 
-class OptionCalculator(Results, Logging, Equations, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
+class OptionCalculator(Results, Logging, DataframeEquation, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
     trading = lambda expire: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(Date.today()) + pd.Timedelta(days=1), end_date=ending)))
     business = lambda expire: np.busday_count(np.datetime64(Date.today()) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
     calender = lambda expire: (pd.to_datetime(expire) - pd.Timestamp(Date.today())).dt.days

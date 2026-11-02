@@ -16,7 +16,7 @@ import pandas_market_calendars as calenders
 
 from finance.enumerations import Instrument
 from finance.reporting import Results
-from support.equations import Equations
+from support.equations import DataframeEquation
 from support.mixins import Logging
 
 __version__ = "1.0.0"
@@ -63,7 +63,7 @@ class Neighborhood:
         return scale + 1e-12
 
 
-class VarianceCalculator(Results, Logging, Equations):
+class VarianceCalculator(Results, Logging, DataframeEquation):
     tau = lambda expire: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(Date.today()) + pd.Timedelta(days=1), end_date=ending))) / 252
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
