@@ -63,7 +63,7 @@ class OptionCalculator(Results, Logging, DataframeEquation, variables=["moneynes
         return options
 
 
-class SanityFilter(Results, Logging, Equations, parameters={"size": 1}):
+class SanityFilter(Results, Logging, DataframeEquation, parameters={"size": 1}):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
     supplied = lambda supply, *, size: supply.notna() & (supply >= size)
     demanded = lambda demand, *, size: demand.notna() & (demand >= size)
