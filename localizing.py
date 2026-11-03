@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from finance.enumerations import Instrument
 from finance.querys import Contract
 from finance.reporting import Results
-from finance.variables import OSI
+from finance.options import OSI
 from support.custom import NumberRange
 from support.mixins import Logging
 

@@ -11,7 +11,7 @@ import pandas as pd
 from dataclasses import dataclass
 from abc import ABC, ABCMeta, abstractmethod
 
-from finance.variables import OSI
+from finance.options import OSI
 from finance.reporting import Results
 from finance.enumerations import Spread, Instrument, Position, Right
 from support.meta import RegistryMeta
