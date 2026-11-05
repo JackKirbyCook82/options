@@ -14,7 +14,6 @@ from datetime import date as Date
 from datetime import timedelta as Timedelta
 from collections import OrderedDict as ODict
 
-from finance.enumerations import Instrument
 from finance.reporting import Results
 from support.equations import Equation
 from support.custom import NumberRange
@@ -35,21 +34,25 @@ class Settlement: expire: Date; strike: NumberRange
 
 @dataclass
 class Settlements:
-    settlements: list
+    aslist: list
+
+    def __post_init__(self):
+        self.asdict = ODict([(settlement.expire, settlement.strike) for settlement in self.aslist])
+
+    def __len__(self): return len(self.aslist)
+    def __iter__(self): return iter(self.aslist)
 
     def __contains__(self, settlement):
         assert isinstance(settlement, tuple) and len(settlement) == 2
         expire, strike = settlement
-        assert isinstance(expire, Date) and isinstance(strike, float)
-        settlements = ODict([(settlement.expire, settlement.strike) for settlement in self.settlements])
-        return strike in settlements.get(expire, [])
+        strikes = self.asdict.get(expire)
+        return strikes is not None and strike in strikes
 
 
 class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
     tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
     forward = lambda spot, expire, today, tau, interest, dividends: spot * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
-    tau = lambda expire, today: (expire - today).days / 252
 
     def __init__(self, *args, today, zscore, **kwargs):
         super().__init__(*args, **kwargs)
@@ -59,10 +62,10 @@ class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
     def __call__(self, expires, /, **kwargs):
         assert isinstance(expires, list) and all([isinstance(expire, Date) for expire in expires])
         settlements = self.calculate(expires, **kwargs)
-        scope = self.scope(settlements, instrument=Instrument.SETTLEMENT)
+        scope = self.scope(settlements)
         results = self.results(scope=scope, size=len(settlements))
         self.console("Calculated", results)
-        return settlements
+        return Settlements(settlements)
 
     def calculate(self, expires, /, **kwargs):
         settlements = self.calculator(expires, **kwargs)
@@ -75,7 +78,8 @@ class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
             minimum = self.evaluate(expire=expire, zscore=-self.zscore, **parameters)["strike"]
             maximum = self.evaluate(expire=expire, zscore=+self.zscore, **parameters)["strike"]
             strikes = NumberRange([minimum, maximum])
-            yield expire, strikes
+            settlement = Settlement(expire, strikes)
+            yield settlement
 
     @property
     def zscore(self): return self.__zscore
