@@ -41,7 +41,7 @@ class Settlements:
 
 
 class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
-    forward = lambda spot, expire, today, tau, interest, dividends: spot * np.exp(np.subtract(interest, dividends) * tau(expire))
+    forward = lambda spot, expire, today, tau, interest, dividends: spot * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
     tau = lambda expire, today: (expire - today).days / 252
 
