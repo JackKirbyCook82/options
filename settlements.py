@@ -8,8 +8,10 @@ Created on Weds Nov 4 2026
 """
 
 import numpy as np
+import pandas_market_calendars as calendar
 from dataclasses import dataclass
 from datetime import date as Date
+from datetime import timedelta as Timedelta
 from collections import OrderedDict as ODict
 
 from finance.enumerations import Instrument
@@ -23,6 +25,9 @@ __author__ = "Jack Kirby Cook"
 __all__ = ["SettlementCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
+
+
+nyse = calendar.get_calendar("NYSE")
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +46,7 @@ class Settlements:
 
 
 class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
+    tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
     forward = lambda spot, expire, today, tau, interest, dividends: spot * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
     tau = lambda expire, today: (expire - today).days / 252
