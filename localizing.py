@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 
 from finance.enumerations import Instrument
 from finance.querys import Contract
-from finance.reporting import Results
+from finance import Scope, Results, Empty
 from finance.variables import OSI
 from support.custom import NumberRange
 from support.mixins import Logging
@@ -87,7 +87,7 @@ class PartitionedLocalizingError(Exception): pass
 class ProximityLocalizingError(LocalizingError): pass
 
 
-class LocalizingCalculator(Results, Logging, ABC):
+class LocalizingCalculator(Scope, Results, Logging, ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
@@ -184,11 +184,13 @@ class LocalizingCalculator(Results, Logging, ABC):
 
 class PartitionCalculator(LocalizingCalculator):
     def __call__(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame) and not options.empty
+        if options is None: raise Empty()
+        assert isinstance(options, pd.DataFrame)
+        if options.empty: raise Empty()
         options = self.cleaner(options)
         for partition in self.calculator(options, **kwargs):
-            scope = self.scope(partition, instrument=Instrument.OPTION)
-            results = self.results(scope=scope, size=len(partition))
+            scope = self.scope(partition)
+            results = self.results(scope, len(partition), Instrument.OPTION)
             self.console("Calculated", results)
             yield partition
 
@@ -213,12 +215,14 @@ class PartitionCalculator(LocalizingCalculator):
 
 class ProximityCalculator(LocalizingCalculator):
     def __call__(self, options, proximity, **kwargs):
-        assert isinstance(options, pd.DataFrame) and not options.empty
-        assert isinstance(proximity, pd.DataFrame) and not proximity.empty
+        if options is None or proximity is None: raise Empty()
+        assert isinstance(options, pd.DataFrame)
+        assert isinstance(proximity, pd.DataFrame)
+        if options.empty or proximity.empty: raise Empty()
         options = self.cleaner(options)
         proximity = self.calculator(options, proximity, **kwargs)
-        scope = self.scope(proximity, instrument=Instrument.OPTION)
-        results = self.results(scope=scope, size=len(proximity))
+        scope = self.scope(proximity)
+        results = self.results(scope, len(proximity), Instrument.OPTION)
         self.console("Calculated", results)
         return proximity
 

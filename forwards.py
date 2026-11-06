@@ -13,7 +13,7 @@ import pandas as pd
 from itertools import product as iterprod
 
 from finance.enumerations import Instrument, Right
-from finance.reporting import Results
+from finance import Scope, Results, Empty
 from support.mixins import Logging
 
 __version__ = "1.0.0"
@@ -27,18 +27,20 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Results, Logging):
+class ForwardCalculator(Scope, Results, Logging):
     def __init__(self, *args, tightness=0.15, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
         self.__tightness = float(tightness)
 
     def __call__(self, options, /, **kwargs):
+        if options is None: raise Empty()
         assert isinstance(options, pd.DataFrame)
-        scope = self.scope(options, instrument=Instrument.OPTION)
+        if options.empty: raise Empty()
+        scope = self.scope(options)
         options = self.calculate(options, **kwargs)
         options = options.sort_index(inplace=False)
-        results = self.results(scope=scope, size=len(options))
+        results = self.results(scope, len(options), Instrument.OPTION)
         self.console("Calculated", results)
         return options
 

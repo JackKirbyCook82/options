@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from abc import ABC, ABCMeta, abstractmethod
 
 from finance.variables import OSI
-from finance.reporting import Results
+from finance import Scope, Results, Empty
 from finance.enumerations import Spread, Instrument, Position, Right
 from support.meta import RegistryMeta
 from support.custom import DateRange
@@ -185,13 +185,15 @@ class CalendarProspectCreator(ProspectCreator, register=Spread.CALENDAR):
         return prospect
 
 
-class ProspectPortfolioCalculator(Results, Logging):
+class ProspectPortfolioCalculator(Scope, Results, Logging):
     def __call__(self, holdings, /, **kwargs):
+        if holdings is None: raise Empty()
         assert isinstance(holdings, pd.DataFrame)
-        scope = self.scope(holdings, instrument=Instrument.OPTION)
+        if holdings.empty: raise Empty()
+        scope = self.scope(holdings)
         generator = self.calculator(holdings, **kwargs)
         prospects = list(generator)
-        results = self.results(scope=scope, size=len(prospects))
+        results = self.results(scope, len(prospects), Instrument.OPTION)
         self.console("Calculated", results)
         return prospects
 
@@ -201,18 +203,20 @@ class ProspectPortfolioCalculator(Results, Logging):
             yield Prospect(spread, securities)
 
 
-class ProspectMarketCalculator(Results, Logging):
+class ProspectMarketCalculator(Scope, Results, Logging):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
         self.__limit = int(limit)
 
     def __call__(self, options, /, **kwargs):
+        if options is None: raise Empty()
         assert isinstance(options, pd.DataFrame)
-        scope = self.scope(options, instrument=Instrument.OPTION)
+        if options.empty: raise Empty()
+        scope = self.scope(options)
         generator = self.calculator(options, **kwargs)
         prospects = list(generator)
-        results = self.results(scope=scope, size=len(prospects))
+        results = self.results(scope, len(prospects), Instrument.OPTION)
         self.console("Calculated", results)
         return prospects
 

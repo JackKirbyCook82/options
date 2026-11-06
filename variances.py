@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
 from finance.enumerations import Instrument
-from finance.reporting import Results
+from finance import Scope, Results, Empty
 from support.equations import DataframeEquation
 from support.mixins import Logging
 
@@ -62,23 +62,25 @@ class Neighborhood:
         return scale + 1e-12
 
 
-class VarianceCalculator(Results, Logging, DataframeEquation):
+class VarianceCalculator(Scope, Results, DataframeEquation, Logging):
     tau = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending))) / 252
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
     def __call__(self, options, /, **kwargs):
+        if options is None: raise Empty()
         assert isinstance(options, pd.DataFrame)
-        scope = self.scope(options, instrument=Instrument.OPTION)
+        if options.empty: raise Empty()
+        scope = self.scope(options)
         variance = self.execute(options, **kwargs)
         options = pd.concat([options, variance], axis=1)
-        results = self.results(scope=scope, size=len(options))
+        results = self.results(scope, len(options), Instrument.OPTION)
         self.console("Calculated", results)
         return options
 
 
 class VarianceError(Exception): pass
-class VarianceScreener(Results, Logging):
+class VarianceScreener(Scope, Results, Logging):
     def __init__(self, *args, neighbors=25, quantile=0.95, multiple=2.5, **kwargs):
         assert (0.0 < quantile < 1.0) and (multiple > 1.0)
         super().__init__(*args, **kwargs)
@@ -87,14 +89,16 @@ class VarianceScreener(Results, Logging):
         self.__multiple = float(multiple)
 
     def __call__(self, options, /, **kwargs):
+        if options is None: raise Empty()
         assert isinstance(options, pd.DataFrame)
-        scope = self.scope(options, instrument=Instrument.OPTION)
+        if options.empty: raise Empty()
+        scope = self.scope(options)
         if bool(options.empty): return options
         mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
         options = options[mask].dropna(how="all", inplace=False)
         screened = self.screener(options)
         size = (len(options.index), len(screened.index))
-        results = self.results(scope=scope, size=size)
+        results = self.results(scope, size, Instrument.OPTION)
         self.console("Screened", results)
         return screened
 
@@ -120,21 +124,23 @@ class VarianceScreener(Results, Logging):
     def multiple(self): return self.__multiple
 
 
-class VarianceStandardizer(Results, Logging):
+class VarianceStandardizer(Scope, Results, Logging):
     def __init__(self, *args, neighbors, **kwargs):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
 
     def __call__(self, options, surface, /, **kwargs):
+        if options is None or surface is None: raise Empty()
         assert isinstance(options, pd.DataFrame)
-        scope = self.scope(options, instrument=Instrument.OPTION)
+        if options.empty: raise Empty()
+        scope = self.scope(options)
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standardize(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="zscore", index=options.index)
         options = pd.concat([options, standard], axis=1)
-        results = self.results(scope=scope, size=len(options))
+        results = self.results(scope, len(options), Instrument.OPTION)
         self.console("Calculated", results)
         return options
 

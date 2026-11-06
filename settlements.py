@@ -14,7 +14,7 @@ from datetime import date as Date
 from datetime import timedelta as Timedelta
 from collections import OrderedDict as ODict
 
-from finance.reporting import Results
+from finance import Scope, Results, Empty
 from support.equations import Equation
 from support.custom import NumberRange
 from support.mixins import Logging
@@ -49,7 +49,7 @@ class Settlements:
         return strikes is not None and strike in strikes
 
 
-class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
+class SettlementCalculator(Scope, Results, Equation, Logging, variables=["strike"]):
     tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
     forward = lambda underlying, expire, today, tau, interest, dividends: underlying * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
@@ -60,10 +60,12 @@ class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
         self.__today = today
 
     def __call__(self, expires, /, **kwargs):
+        if expires is None: raise Empty()
         assert isinstance(expires, list) and all([isinstance(expire, Date) for expire in expires])
+        if not bool(expires): raise Empty()
         settlements = self.calculate(expires, **kwargs)
         scope = self.scope(settlements)
-        results = self.results(scope=scope, size=len(settlements))
+        results = self.results(scope, len(settlements), "settlement")
         self.console("Calculated", results)
         return Settlements(settlements)
 
@@ -72,11 +74,11 @@ class SettlementCalculator(Results, Logging, Equation, variables=["strike"]):
         settlements = list(settlements)
         return settlements
 
-    def calculator(self, expires, /, spot, volatility, dividends, interest, **kwargs):
-        parameters = dict(spot=spot, volatility=volatility, dividends=dividends, interest=interest)
+    def calculator(self, expires, /, underlying, volatility, dividends, interest, **kwargs):
+        parameters = dict(underlying=underlying, volatility=volatility, dividends=dividends, interest=interest)
         for expire in expires:
-            minimum = self.evaluate(expire=expire, zscore=-self.zscore, **parameters)["strike"]
-            maximum = self.evaluate(expire=expire, zscore=+self.zscore, **parameters)["strike"]
+            minimum = self.evaluate(expire=expire, today=self.today, zscore=-self.zscore, **parameters)["strike"]
+            maximum = self.evaluate(expire=expire, today=self.today, zscore=+self.zscore, **parameters)["strike"]
             strikes = NumberRange([minimum, maximum])
             settlement = Settlement(expire, strikes)
             yield settlement
