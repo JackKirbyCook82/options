@@ -152,11 +152,9 @@ class GreekCalculator(Results, Logging):
         self.__calculated = calculated
         self.__requesting = requesting
 
-    def __call__(self, options, /, interest, dividends, signature, delimiter=None, **kwargs):
+    def __call__(self, options, /, interest, dividends, volatility, **kwargs):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
-        try: volatility, prefix = str(signature).split("->")
-        except AttributeError: raise GreekSignatureError()
         x = options["underlying"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         i = options["right"].apply(int).to_numpy(np.int8)
@@ -168,7 +166,6 @@ class GreekCalculator(Results, Logging):
         calculated = list(calculation(x, k, τ, σ, i, float(interest), float(dividends)))
         calculated = dict(zip(self.calculated, calculated))
         greeks = {requested: calculated[requested] for requested in self.requesting}
-        if bool(delimiter): greeks = {str(delimiter).join([prefix, key]): value for key, value in greeks.items()}
         greeks = pd.DataFrame(greeks, index=options.index)
         options = pd.concat([options, greeks], axis=1)
         results = self.results(scope=scope, size=len(options))

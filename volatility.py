@@ -18,7 +18,7 @@ from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["VolatilityCalculator"]
+__all__ = ["ImpliedVolatilityCalculator"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -171,26 +171,23 @@ def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     return σ
 
 
-class VolatilitySignatureError(Exception): pass
-class VolatilityCalculator(Results, Logging):
+class ImpliedVolatilityCalculator(Results, Logging):
     def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    def __call__(self, options, /, interest, dividends, signature, **kwargs):
+    def __call__(self, options, /, interest, dividends, price, **kwargs):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
-        try: valuation, volatility = str(signature).split("->")
-        except AttributeError: raise VolatilitySignatureError()
         x = options["underlying"].to_numpy(np.float64)
-        y = options[valuation].to_numpy(np.float64)
+        y = options[price].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         i = options["right"].apply(int).to_numpy(np.int8)
         try: τ = options["tau"].dropna(inplace=False).to_numpy()
         except KeyError:
             try: τ = options["trading"].dropna(inplace=False).to_numpy() / 252
             except KeyError: τ = options["calender"].dropna(inplace=False).to_numpy() / 365
-        options[volatility] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
+        options["implied"] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
         results = self.results(scope=scope, size=len(options))
         self.console("Calculated", results)
         return options

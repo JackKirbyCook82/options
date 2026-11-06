@@ -69,11 +69,9 @@ def calculation(x, k, τ, σ, i, r, q):
 
 class ValuationSignatureError(Exception): pass
 class ValuationCalculator(Results, Logging):
-    def __call__(self, options, /, interest, dividends, signature, **kwargs):
+    def __call__(self, options, /, interest, dividends, volatility, valuation, **kwargs):
         assert isinstance(options, pd.DataFrame)
         scope = self.scope(options, instrument=Instrument.OPTION)
-        try: volatility, valuation = str(signature).split("->")
-        except AttributeError: raise ValuationSignatureError()
         x = options["underlying"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         i = options["right"].apply(int).to_numpy(np.int8)
