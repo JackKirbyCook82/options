@@ -12,8 +12,7 @@ import numpy as np
 import pandas as pd
 from itertools import product as iterprod
 
-from finance.enumerations import Instrument, Right
-from finance import Scope, Results, Empty
+from finance.enumerations import Right
 from support.mixins import Logging
 
 __version__ = "1.0.0"
@@ -27,30 +26,22 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Scope, Results, Logging):
+class ForwardCalculator(Logging):
     def __init__(self, *args, tightness=0.15, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
         self.__tightness = float(tightness)
 
     def __call__(self, options, /, **kwargs):
-        if options is None: raise Empty()
+        if options is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
-        scope = self.scope(options)
-        options = self.calculate(options, **kwargs)
-        options = options.sort_index(inplace=False)
-        results = self.results(scope, len(options), Instrument.OPTION)
-        self.console("Calculated", results)
-        return options
-
-    def calculate(self, options, /, **kwargs):
-        assert isinstance(options, pd.DataFrame)
+        if options.empty: return None
         generator = self.calculator(options, **kwargs)
-        results = list(generator)
-        if bool(results): options = pd.concat(results, axis=0)
-        else: results = pd.DataFrame(columns=options.columns)
-        return results
+        calculated = list(generator)
+        if not calculated: return None
+        calculated = pd.concat(calculated, axis=0)
+        calculated = calculated.sort_index(inplace=False)
+        return calculated
 
     def calculator(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)

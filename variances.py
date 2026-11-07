@@ -13,10 +13,7 @@ from scipy.spatial import cKDTree
 from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
-from finance.enumerations import Instrument
-from finance import Scope, Results, Empty
 from support.equations import DataframeEquation
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -62,25 +59,22 @@ class Neighborhood:
         return scale + 1e-12
 
 
-class VarianceCalculator(Scope, Results, DataframeEquation, Logging):
+class VarianceCalculator(DataframeEquation):
     tau = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending))) / 252
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
     def __call__(self, options, /, **kwargs):
-        if options is None: raise Empty()
+        if options is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
-        scope = self.scope(options)
+        if options.empty: return None
         variance = self.execute(options, **kwargs)
         options = pd.concat([options, variance], axis=1)
-        results = self.results(scope, len(options), Instrument.OPTION)
-        self.console("Calculated", results)
         return options
 
 
 class VarianceError(Exception): pass
-class VarianceScreener(Scope, Results, Logging):
+class VarianceScreener(object):
     def __init__(self, *args, neighbors=25, quantile=0.95, multiple=2.5, **kwargs):
         assert (0.0 < quantile < 1.0) and (multiple > 1.0)
         super().__init__(*args, **kwargs)
@@ -89,17 +83,14 @@ class VarianceScreener(Scope, Results, Logging):
         self.__multiple = float(multiple)
 
     def __call__(self, options, /, **kwargs):
-        if options is None: raise Empty()
+        if options is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
-        scope = self.scope(options)
-        if bool(options.empty): return options
+        if options.empty: return None
         mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
         options = options[mask].dropna(how="all", inplace=False)
+        if options.empty: return None
         screened = self.screener(options)
-        size = (len(options.index), len(screened.index))
-        results = self.results(scope, size, Instrument.OPTION)
-        self.console("Screened", results)
+        if screened.empty: return None
         return screened
 
     def screener(self, options):
@@ -110,11 +101,12 @@ class VarianceScreener(Scope, Results, Logging):
         ntiv = np.fromiter(ntiv, dtype=np.float64)
         valid = np.isfinite(ntiv) & (ntiv > 0)
         if not valid.any(): raise VarianceError()
-        ntiv = ntiv[valid]
-        quantile = np.quantile(ntiv, self.quantile)
-        median = np.median(ntiv)
-        mask = ntiv > max(quantile, self.multiple * median)
-        return options.loc[~mask]
+        population = ntiv[valid]
+        quantile = np.quantile(population, self.quantile)
+        median = np.median(population)
+        threshold = max(quantile, self.multiple * median)
+        remove = valid & (ntiv > threshold)
+        return options.iloc[np.flatnonzero(~remove)]
 
     @property
     def neighborhood(self): return self.__neighborhood
@@ -124,24 +116,21 @@ class VarianceScreener(Scope, Results, Logging):
     def multiple(self): return self.__multiple
 
 
-class VarianceStandardizer(Scope, Results, Logging):
+class VarianceStandardizer(object):
     def __init__(self, *args, neighbors, **kwargs):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
 
     def __call__(self, options, surface, /, **kwargs):
-        if options is None or surface is None: raise Empty()
+        if options is None or surface is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
-        scope = self.scope(options)
+        if options.empty: return None
         tau = options["tau"].to_numpy(dtype=float)
         mae = options["mae"].to_numpy(dtype=float)
         tiv = options["tiv"].to_numpy(dtype=float)
         standard = self.standardize(tau, mae, tiv, surface)
         standard = pd.Series(standard, name="zscore", index=options.index)
         options = pd.concat([options, standard], axis=1)
-        results = self.results(scope, len(options), Instrument.OPTION)
-        self.console("Calculated", results)
         return options
 
     def standardize(self, t, k, w, f):

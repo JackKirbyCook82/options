@@ -12,10 +12,6 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.enumerations import Instrument
-from finance import Scope, Results, Empty
-from support.mixins import Logging
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["ImpliedVolatilityCalculator"]
@@ -171,16 +167,15 @@ def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     return σ
 
 
-class ImpliedVolatilityCalculator(Scope, Results, Logging):
+class ImpliedVolatilityCalculator(object):
     def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
     def __call__(self, options, /, interest, dividends, price, **kwargs):
-        if options is None: raise Empty()
+        if options is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
-        scope = self.scope(options)
+        if options.empty: return None
         x = options["underlying"].to_numpy(np.float64)
         y = options[price].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
@@ -190,8 +185,6 @@ class ImpliedVolatilityCalculator(Scope, Results, Logging):
             try: τ = options["trading"].dropna(inplace=False).to_numpy() / 252
             except KeyError: τ = options["calender"].dropna(inplace=False).to_numpy() / 365
         options["implied"] = calculation(y, x, k, τ, i, float(interest), float(dividends), **self.hyperparams)
-        results = self.results(scope, len(options), Instrument.OPTION)
-        self.console("Calculated", results)
         return options
 
     @property

@@ -19,10 +19,7 @@ from datetime import date as Date
 from datetime import timedelta as Timedelta
 
 from finance.enumerations import Spread, Action
-from finance import Scope, Results, Analysis, Empty
 from options.prospects import Prospect
-from support.custom import NumberRange
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -172,7 +169,7 @@ class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightnes
     def costing(self): return self.__costing
 
 
-class Calculator(Scope, Results, Analysis, Logging, ABC):
+class Calculator(ABC):
     def __init_subclass__(cls, /, target, **kwargs):
         super().__init_subclass__()
         cls.__target__ = target
@@ -186,45 +183,19 @@ class Calculator(Scope, Results, Analysis, Logging, ABC):
         self.__metrics = metrics
 
     def __call__(self, prospects, **kwargs):
-        if prospects is None: raise Empty()
+        if prospects is None: return None
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])
-        if not bool(prospects): raise Empty()
-        scope = self.scope(prospects)
+        if not prospects: return None
+        targets = self.calculate(prospects, **kwargs)
+        if not targets: return None
+        targets = [target for target in targets if self.metrics(target)]
+        targets.sort(key=self.priority, reverse=True)
+        return targets
+
+    def calculate(self, prospects, /, **kwargs):
         parameters = dict(costing=self.costing, scenarios=self.scenarios, halflife=self.halflife)
         targets = [self.target.create(prospect, **parameters) for prospect in prospects]
-        if not bool(targets): return targets
-        divestitures = [target for target in targets if self.metrics(target)]
-        divestitures.sort(key=self.priority, reverse=True)
-        size = (len(targets), len(divestitures))
-        results = self.results(scope, size, "target")
-        analysis = self.analysis(targets) if bool(targets) else []
-        self.console("Calculated", results, *analysis)
-        return divestitures
-
-    def reports(self, boundary, survival):
-        zspread = f"|ZSpread| >= {self.metrics.zspread:.2f} [{boundary.zspreads.minimum:+.2f} -> {boundary.zspreads.maximum:+.2f}, {survival.zspreads:.0f}%]"
-        multiple = f"Multiple >= {self.metrics.multiple:.2f} [{boundary.multiples.minimum:+.2f} -> {boundary.multiples.maximum:+.2f}, {survival.multiples:.0f}%]"
-        ratio = f"Ratio >= {self.metrics.ratio:.2f} [{boundary.ratios.minimum:+.2f} -> {boundary.ratios.maximum:+.2f}, {survival.ratios:.0f}%]"
-        return [zspread, multiple, ratio]
-
-    def survival(self, targets):
-        zspreads = [target.zspread >= self.metrics.zspread for target in targets]
-        multiples = [target.multiple >= self.metrics.multiple for target in targets]
-        ratios = [target.ratio >= self.metrics.ratio for target in targets]
-        zspreads = sum(zspreads) / len(zspreads) * 100
-        multiples = sum(multiples) / len(multiples) * 100
-        ratios = sum(ratios) / len(ratios) * 100
-        return SimpleNamespace(zspreads=zspreads, multiples=multiples, ratios=ratios)
-
-    @staticmethod
-    def boundary(targets):
-        zspreads = [target.zspread for target in targets]
-        multiples = [target.multiple for target in targets]
-        ratios = [target.ratio for target in targets]
-        zspreads = NumberRange([min(zspreads), max(zspreads)])
-        multiples = NumberRange([min(multiples), max(multiples)])
-        ratios = NumberRange([min(ratios), max(ratios)])
-        return SimpleNamespace(zspreads=zspreads, multiples=multiples, ratios=ratios)
+        return targets
 
     @property
     def target(self): return type(self).__target__

@@ -14,12 +14,9 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 
-from finance.enumerations import Instrument
 from finance.querys import Contract
-from finance import Scope, Results, Empty
 from finance.variables import OSI
 from support.custom import NumberRange
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -87,7 +84,7 @@ class PartitionedLocalizingError(Exception): pass
 class ProximityLocalizingError(LocalizingError): pass
 
 
-class LocalizingCalculator(Scope, Results, Logging, ABC):
+class LocalizingCalculator(ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
@@ -184,14 +181,11 @@ class LocalizingCalculator(Scope, Results, Logging, ABC):
 
 class PartitionCalculator(LocalizingCalculator):
     def __call__(self, options, /, **kwargs):
-        if options is None: raise Empty()
+        if options is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
+        if options.empty: return None
         options = self.cleaner(options)
         for partition in self.calculator(options, **kwargs):
-            scope = self.scope(partition)
-            results = self.results(scope, len(partition), Instrument.OPTION)
-            self.console("Calculated", results)
             yield partition
 
     def calculator(self, options, **kwargs):
@@ -215,15 +209,12 @@ class PartitionCalculator(LocalizingCalculator):
 
 class ProximityCalculator(LocalizingCalculator):
     def __call__(self, options, proximity, **kwargs):
-        if options is None or proximity is None: raise Empty()
+        if options is None or proximity is None: return None
         assert isinstance(options, pd.DataFrame)
         assert isinstance(proximity, pd.DataFrame)
-        if options.empty or proximity.empty: raise Empty()
+        if options.empty or proximity.empty: return None
         options = self.cleaner(options)
         proximity = self.calculator(options, proximity, **kwargs)
-        scope = self.scope(proximity)
-        results = self.results(scope, len(proximity), Instrument.OPTION)
-        self.console("Calculated", results)
         return proximity
 
     def calculator(self, options, proximity, **kwargs):

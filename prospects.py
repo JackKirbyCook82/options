@@ -11,12 +11,10 @@ import pandas as pd
 from dataclasses import dataclass
 from abc import ABC, ABCMeta, abstractmethod
 
-from finance.variables import OSI
-from finance import Scope, Results, Empty
 from finance.enumerations import Spread, Instrument, Position, Right
+from finance.variables import OSI
 from support.meta import RegistryMeta
 from support.custom import DateRange
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -185,16 +183,14 @@ class CalendarProspectCreator(ProspectCreator, register=Spread.CALENDAR):
         return prospect
 
 
-class ProspectPortfolioCalculator(Scope, Results, Logging):
+class ProspectPortfolioCalculator(object):
     def __call__(self, holdings, /, **kwargs):
-        if holdings is None: raise Empty()
+        if holdings is None: return None
         assert isinstance(holdings, pd.DataFrame)
-        if holdings.empty: raise Empty()
-        scope = self.scope(holdings)
+        if holdings.empty: return None
         generator = self.calculator(holdings, **kwargs)
         prospects = list(generator)
-        results = self.results(scope, len(prospects), Instrument.OPTION)
-        self.console("Calculated", results)
+        if not prospects: return None
         return prospects
 
     @staticmethod
@@ -203,21 +199,19 @@ class ProspectPortfolioCalculator(Scope, Results, Logging):
             yield Prospect(spread, securities)
 
 
-class ProspectMarketCalculator(Scope, Results, Logging):
+class ProspectMarketCalculator(object):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
         self.__limit = int(limit)
 
     def __call__(self, options, /, **kwargs):
-        if options is None: raise Empty()
+        if options is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
-        scope = self.scope(options)
+        if options.empty: return None
         generator = self.calculator(options, **kwargs)
         prospects = list(generator)
-        results = self.results(scope, len(prospects), Instrument.OPTION)
-        self.console("Calculated", results)
+        if not prospects: return None
         return prospects
 
     def calculator(self, options, /, **kwargs):

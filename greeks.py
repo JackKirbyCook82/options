@@ -12,10 +12,6 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.enumerations import Instrument
-from finance import Scope, Results, Empty
-from support.mixins import Logging
-
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["GreekCalculator"]
@@ -142,7 +138,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekError(Exception): pass
-class GreekCalculator(Scope, Results, Logging):
+class GreekCalculator(object):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         calculated = ["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"]
@@ -152,10 +148,9 @@ class GreekCalculator(Scope, Results, Logging):
         self.__requesting = requesting
 
     def __call__(self, options, /, interest, dividends, volatility, **kwargs):
-        if options is None: raise Empty()
+        if options is None: return None
         assert isinstance(options, pd.DataFrame)
-        if options.empty: raise Empty()
-        scope = self.scope(options)
+        if options.empty: return None
         x = options["underlying"].to_numpy(np.float64)
         k = options["strike"].to_numpy(np.float64)
         i = options["right"].apply(int).to_numpy(np.int8)
@@ -169,8 +164,6 @@ class GreekCalculator(Scope, Results, Logging):
         greeks = {requested: calculated[requested] for requested in self.requesting}
         greeks = pd.DataFrame(greeks, index=options.index)
         options = pd.concat([options, greeks], axis=1)
-        results = self.results(scope, len(options), Instrument.OPTION)
-        self.console("Calculated", results)
         return options
 
     @property
