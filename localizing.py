@@ -79,11 +79,6 @@ class Localizing:
         return instance
 
 
-class LocalizingError(Exception): pass
-class PartitionedLocalizingError(Exception): pass
-class ProximityLocalizingError(LocalizingError): pass
-
-
 class LocalizingCalculator(ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
@@ -181,9 +176,9 @@ class LocalizingCalculator(ABC):
 
 class PartitionCalculator(LocalizingCalculator):
     def __call__(self, options, /, **kwargs):
-        if options is None: return None
+        if options is None: return
         assert isinstance(options, pd.DataFrame)
-        if options.empty: return None
+        if options.empty: return
         options = self.cleaner(options)
         for partition in self.calculator(options, **kwargs):
             yield partition
@@ -214,6 +209,7 @@ class ProximityCalculator(LocalizingCalculator):
         assert isinstance(proximity, pd.DataFrame)
         if options.empty or proximity.empty: return None
         options = self.cleaner(options)
+        if options.empty: return None
         proximity = self.calculator(options, proximity, **kwargs)
         return proximity
 
@@ -223,7 +219,7 @@ class ProximityCalculator(LocalizingCalculator):
             if not self.adequate(proposed): continue
             if not self.contained(proposed, proximity): continue
             return proposed
-        raise ProximityLocalizingError()
+        return None
 
     def generator(self, options, proximity, **kwargs):
         centers = self.centers(options)
