@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
+from support.mixins import Logging
+
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
 __all__ = ["GreekCalculator"]
@@ -138,7 +140,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekError(Exception): pass
-class GreekCalculator(object):
+class GreekCalculator(Logging):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         calculated = ["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"]

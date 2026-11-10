@@ -14,6 +14,7 @@ import pandas_market_calendars as calenders
 
 from support.equations import DataframeEquation
 from support.custom import NumberRange
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -38,7 +39,7 @@ class Metrics(Measure):
         assert self.activity is not None and self.activity > 0
 
 
-class OptionCalculator(DataframeEquation, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
+class OptionCalculator(DataframeEquation, Logging, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
     trading = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending)))
     business = lambda expire, today: np.busday_count(np.datetime64(today) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
     calender = lambda expire, today: (pd.to_datetime(expire) - pd.Timestamp(today)).dt.days
@@ -58,7 +59,7 @@ class OptionCalculator(DataframeEquation, variables=["moneyness", "tightness", "
         return options
 
 
-class SanityFilter(DataframeEquation, defaults={"size": 1}):
+class SanityFilter(DataframeEquation, Logging, defaults={"size": 1}):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
     supplied = lambda supply, *, size: supply.notna() & (supply >= size)
     demanded = lambda demand, *, size: demand.notna() & (demand >= size)
@@ -77,7 +78,7 @@ class SanityFilter(DataframeEquation, defaults={"size": 1}):
 
 
 class ViabilityMetrics(Metrics): pass
-class ViabilityFilter(object):
+class ViabilityFilter(Logging):
     def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
         self.__metrics = metrics
@@ -90,6 +91,27 @@ class ViabilityFilter(object):
         filtered = options.where(viability).dropna(how="all", inplace=False)
         if filtered.empty: return None
         return filtered
+
+#        tickers = set(options["tickers"].unique())
+#        expires = set(options["expires"].unique())
+#        tickers = f"{','.join(tickers)}"
+#        expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
+#        quantity = f"{len(options):.0f}->{len(filtered):.0f}"
+#        string = f"Filtered[{tickers}, {expires}, {quantity}]"
+
+#        moneyness = (options["moneyness"].abs() <= metrics.moneyness).sum() / len(options.index) * 100
+#        tightness = (options["tightness"] <= metrics.tightness).sum() / len(options.index) * 100
+#        activity = (options["activity"] >= metrics.activity).sum() / len(options.index) * 100
+#        survival = SimpleNamespace(moneyness=moneyness, tightness=tightness, activity=activity)
+
+#        moneyness = NumberRange(options["moneyness"].to_list())
+#        tightness = NumberRange(options["tightness"].to_list())
+#        activity = NumberRange(options["activity"].to_list())
+#        boundary = SimpleNamespace(moneyness=moneyness, tightness=tightness, activity=activity)
+
+#        moneyness = f"|Moneyness| <= {metrics.moneyness:.2f} [{boundary.moneyness.minimum:+.2f} -> {boundary.moneyness.maximum:+.2f}, {survival.moneyness:.0f}%]"
+#        tightness = f"Tightness <= {metrics.tightness:.2f} [{boundary.tightness.minimum:+.2f} -> {boundary.tightness.maximum:+.2f}, {survival.tightness:.0f}%]"
+#        activity = f"Activity >= {metrics.activity:.2f} [{boundary.activity.minimum:+.2f} -> {boundary.activity.maximum:+.2f}, {survival.activity:.0f}%]"
 
     def execute(self, options, **kwargs):
         moneyness = options["moneyness"].abs() <= self.metrics.moneyness

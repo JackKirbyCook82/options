@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from finance.querys import Contract
 from finance.variables import OSI
 from support.custom import NumberRange
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -79,7 +80,7 @@ class Localizing:
         return instance
 
 
-class LocalizingCalculator(ABC):
+class LocalizingCalculator(Logging, ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
@@ -183,6 +184,13 @@ class PartitionCalculator(LocalizingCalculator):
         for partition in self.calculator(options, **kwargs):
             yield partition
 
+#            tickers = set(partition["tickers"].unique())
+#            expires = set(partition["expires"].unique())
+#            tickers = f"{','.join(tickers)}"
+#            expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
+#            quantity = f"{len(options):.0f}->{len(partition):.0f}"
+#            string = f"Partitioned[{tickers}, {expires}, {quantity}]"
+
     def calculator(self, options, **kwargs):
         history = list()
         for local in self.generator(options, **kwargs):
@@ -212,6 +220,13 @@ class ProximityCalculator(LocalizingCalculator):
         if options.empty: return None
         proximity = self.calculator(options, proximity, **kwargs)
         return proximity
+
+#        tickers = set(proximity["tickers"].unique())
+#        expires = set(proximity["expires"].unique())
+#        tickers = f"{','.join(tickers)}"
+#        expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
+#        quantity = f"{len(options):.0f}->{len(proximity):.0f}"
+#        string = f"Proximity[{tickers}, {expires}, {quantity}]"
 
     def calculator(self, options, proximity, **kwargs):
         for local in self.generator(options, proximity, **kwargs):

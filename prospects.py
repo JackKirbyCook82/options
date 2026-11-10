@@ -15,6 +15,7 @@ from finance.enumerations import Spread, Instrument, Position, Right
 from finance.variables import OSI
 from support.meta import RegistryMeta
 from support.custom import DateRange
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -183,7 +184,7 @@ class CalendarProspectCreator(ProspectCreator, register=Spread.CALENDAR):
         return prospect
 
 
-class ProspectPortfolioCalculator(object):
+class ProspectPortfolioCalculator(Logging):
     def __call__(self, holdings, /, **kwargs):
         if holdings is None: return None
         assert isinstance(holdings, pd.DataFrame)
@@ -199,7 +200,7 @@ class ProspectPortfolioCalculator(object):
             yield Prospect(spread, securities)
 
 
-class ProspectMarketCalculator(object):
+class ProspectMarketCalculator(Logging):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]

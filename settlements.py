@@ -16,6 +16,7 @@ from collections import OrderedDict as ODict
 
 from support.equations import Equation
 from support.custom import NumberRange
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -47,7 +48,7 @@ class Settlements:
         return strikes is not None and strike in strikes
 
 
-class SettlementCalculator(Equation, variables=["strike"]):
+class SettlementCalculator(Equation, Logging, variables=["strike"]):
     tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
     forward = lambda underlying, expire, today, tau, interest, dividends: underlying * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
@@ -61,13 +62,13 @@ class SettlementCalculator(Equation, variables=["strike"]):
         if expires is None: return None
         assert isinstance(expires, list) and all([isinstance(expire, Date) for expire in expires])
         if not bool(expires): return None
-        settlements = self.calculate(expires, **kwargs)
-        return Settlements(settlements)
-
-    def calculate(self, expires, /, **kwargs):
         settlements = self.calculator(expires, **kwargs)
         settlements = list(settlements)
-        return settlements
+        return Settlements(settlements)
+
+#        expires = set([settlement.expire for settlement in settlements])
+#        expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
+#        string = f"Calculated[{expires}]"
 
     def calculator(self, expires, /, underlying, volatility, dividends, interest, **kwargs):
         parameters = dict(underlying=underlying, volatility=volatility, dividends=dividends, interest=interest)

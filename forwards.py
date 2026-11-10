@@ -61,21 +61,32 @@ class ForwardCalculator(Logging):
                 if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    results = f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]"
-                    self.console("Regression", results)
                     yield options
+
+#                    ticker = f"{ticker}"
+#                    expire = f"{expire.strftime('%Y%m%d')}"
+#                    quantity = f"{len(options)}"
+#                    string = f"Regression[{ticker}, {expire}, {quantity}]"
+
                 else:
                     forwards = self.secondary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    results = f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]"
-                    self.console("AverageCarry", results)
                     yield options
+
+#                    ticker = f"{ticker}"
+#                    expire = f"{expire.strftime('%Y%m%d')}"
+#                    quantity = f"{len(options)}"
+#                    string = f"AverageCarry[{ticker}, {expire}, {quantity}]"
+
             except ForwardSampleError:
                 forwards = self.tertiary(**constants, **kwargs)
                 options = options.assign(**forwards)
-                results = f"Options[{ticker}, {expire.strftime('%Y%m%d')}, {len(options.index)}]"
-                self.console("SingleCarry", results)
                 yield options
+
+#                ticker = f"{ticker}"
+#                expire = f"{expire.strftime('%Y%m%d')}"
+#                quantity = f"{len(options)}"
+#                string = f"SingleCarry[{ticker}, {expire}, {quantity}]"
 
     def primary(self, samples, weights, /, **kwargs):
         difference = samples["difference"].to_numpy()
