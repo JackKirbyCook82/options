@@ -193,32 +193,8 @@ class Calculator(Logging, ABC):
         targets.sort(key=self.priority, reverse=True)
         return targets
 
-#        tickers = set([target.ticker for target in targets])
-#        expires = set([expire for target in targets for expire in target.expires])
-#        tickers = f"{','.join(tickers)}"
-#        expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
 #        quantity = f"{len(prospects):.0f}->{len(targets):.0f}"
 #        string = f"Calculated[{tickers}, {expires}, {quantity}]"
-
-#        zspreads = [target.zspread >= metrics.zspread for target in targets]
-#        multiples = [target.multiple >= metrics.multiple for target in targets]
-#        ratios = [target.ratio >= metrics.ratio for target in targets]
-#        zspreads = sum(zspreads) / len(zspreads) * 100
-#        multiples = sum(multiples) / len(multiples) * 100
-#        ratios = sum(ratios) / len(ratios) * 100
-#        survival = SimpleNamespace(zspreads=zspreads, multiples=multiples, ratios=ratios)
-
-#        zspreads = [target.zspread for target in targets]
-#        multiples = [target.multiple for target in targets]
-#        ratios = [target.ratio for target in targets]
-#        zspreads = NumberRange([min(zspreads), max(zspreads)])
-#        multiples = NumberRange([min(multiples), max(multiples)])
-#        ratios = NumberRange([min(ratios), max(ratios)])
-#        boundary = SimpleNamespace(zspreads=zspreads, multiples=multiples, ratios=ratios)
-
-#        zspread = f"|ZSpread| >= {metrics.zspread:.2f} [{boundary.zspreads.minimum:+.2f} -> {boundary.zspreads.maximum:+.2f}, {survival.zspreads:.0f}%]"
-#        multiple = f"Multiple >= {metrics.multiple:.2f} [{boundary.multiples.minimum:+.2f} -> {boundary.multiples.maximum:+.2f}, {survival.multiples:.0f}%]"
-#        ratio = f"Ratio >= {metrics.ratio:.2f} [{boundary.ratios.minimum:+.2f} -> {boundary.ratios.maximum:+.2f}, {survival.ratios:.0f}%]"
 
     def calculate(self, prospects, /, **kwargs):
         parameters = dict(costing=self.costing, scenarios=self.scenarios, halflife=self.halflife)

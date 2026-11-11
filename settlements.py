@@ -66,10 +66,6 @@ class SettlementCalculator(Equation, Logging, variables=["strike"]):
         settlements = list(settlements)
         return Settlements(settlements)
 
-#        expires = set([settlement.expire for settlement in settlements])
-#        expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
-#        string = f"Calculated[{expires}]"
-
     def calculator(self, expires, /, underlying, volatility, dividends, interest, **kwargs):
         parameters = dict(underlying=underlying, volatility=volatility, dividends=dividends, interest=interest)
         for expire in expires:

@@ -92,26 +92,8 @@ class ViabilityFilter(Logging):
         if filtered.empty: return None
         return filtered
 
-#        tickers = set(options["tickers"].unique())
-#        expires = set(options["expires"].unique())
-#        tickers = f"{','.join(tickers)}"
-#        expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
 #        quantity = f"{len(options):.0f}->{len(filtered):.0f}"
 #        string = f"Filtered[{tickers}, {expires}, {quantity}]"
-
-#        moneyness = (options["moneyness"].abs() <= metrics.moneyness).sum() / len(options.index) * 100
-#        tightness = (options["tightness"] <= metrics.tightness).sum() / len(options.index) * 100
-#        activity = (options["activity"] >= metrics.activity).sum() / len(options.index) * 100
-#        survival = SimpleNamespace(moneyness=moneyness, tightness=tightness, activity=activity)
-
-#        moneyness = NumberRange(options["moneyness"].to_list())
-#        tightness = NumberRange(options["tightness"].to_list())
-#        activity = NumberRange(options["activity"].to_list())
-#        boundary = SimpleNamespace(moneyness=moneyness, tightness=tightness, activity=activity)
-
-#        moneyness = f"|Moneyness| <= {metrics.moneyness:.2f} [{boundary.moneyness.minimum:+.2f} -> {boundary.moneyness.maximum:+.2f}, {survival.moneyness:.0f}%]"
-#        tightness = f"Tightness <= {metrics.tightness:.2f} [{boundary.tightness.minimum:+.2f} -> {boundary.tightness.maximum:+.2f}, {survival.tightness:.0f}%]"
-#        activity = f"Activity >= {metrics.activity:.2f} [{boundary.activity.minimum:+.2f} -> {boundary.activity.maximum:+.2f}, {survival.activity:.0f}%]"
 
     def execute(self, options, **kwargs):
         moneyness = options["moneyness"].abs() <= self.metrics.moneyness

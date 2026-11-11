@@ -184,10 +184,6 @@ class PartitionCalculator(LocalizingCalculator):
         for partition in self.calculator(options, **kwargs):
             yield partition
 
-#            tickers = set(partition["tickers"].unique())
-#            expires = set(partition["expires"].unique())
-#            tickers = f"{','.join(tickers)}"
-#            expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
 #            quantity = f"{len(options):.0f}->{len(partition):.0f}"
 #            string = f"Partitioned[{tickers}, {expires}, {quantity}]"
 
@@ -221,10 +217,6 @@ class ProximityCalculator(LocalizingCalculator):
         proximity = self.calculator(options, proximity, **kwargs)
         return proximity
 
-#        tickers = set(proximity["tickers"].unique())
-#        expires = set(proximity["expires"].unique())
-#        tickers = f"{','.join(tickers)}"
-#        expires = f"{min(expires).strftime('%Y/%m/%d')}->{max(expires).strftime('%Y/%m/%d')}"
 #        quantity = f"{len(options):.0f}->{len(proximity):.0f}"
 #        string = f"Proximity[{tickers}, {expires}, {quantity}]"
 
