@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from support.mixins import Logging
+from finance.variables import Categories
+from finance.console import LoggingDecorator
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -65,7 +66,8 @@ def calculation(x, k, τ, σ, i, r, q):
     return y
 
 
-class ValuationCalculator(Logging):
+class ValuationCalculator(object):
+    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, valuation, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

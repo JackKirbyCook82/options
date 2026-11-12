@@ -13,7 +13,7 @@ from functools import cached_property
 from dataclasses import dataclass, astuple
 
 from options.targets import Target, Calculator
-from finance.enumerations import Intent
+from finance.enumerations import Enumerations
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -67,7 +67,7 @@ class Acquisition(Target):
     @cached_property
     def commissions(self): return self.costing.commissions * self.quantities.sum() * 2
     @cached_property
-    def intent(self): return Intent.OPEN
+    def intent(self): return Enumerations.Intent.OPEN
 
 
 class AcquisitionCalculator(Calculator, target=Acquisition):

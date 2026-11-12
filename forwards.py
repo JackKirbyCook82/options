@@ -10,10 +10,12 @@ Created on Tues Mar 24 2026
 import inspect
 import numpy as np
 import pandas as pd
+from types import SimpleNamespace
 from itertools import product as iterprod
 
-from finance.enumerations import Right
-from support.mixins import Logging
+from finance.console import LoggingDecorator, LoggingMixin
+from finance.variables import Categories
+from finance.enumerations import Enumerations
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -26,12 +28,13 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(Logging):
+class ForwardCalculator(LoggingMixin, categories=[Categories.Ticker, Categories.Expire]):
     def __init__(self, *args, tightness=0.15, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
         self.__tightness = float(tightness)
 
+    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -46,6 +49,7 @@ class ForwardCalculator(Logging):
     def calculator(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
+            contents = [SimpleNamespace(ticker=ticker, expire=expire)]
             underlying = options["underlying"].dropna(inplace=False).to_numpy()
             try: tau = options["tau"].dropna(inplace=False).to_numpy()
             except KeyError:
@@ -61,32 +65,18 @@ class ForwardCalculator(Logging):
                 if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
+                    self.console(contents, title="Regression")
                     yield options
-
-#                    ticker = f"{ticker}"
-#                    expire = f"{expire.strftime('%Y%m%d')}"
-#                    quantity = f"{len(options)}"
-#                    string = f"Regression[{ticker}, {expire}, {quantity}]"
-
                 else:
                     forwards = self.secondary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
+                    self.console(contents, title="AverageCarray")
                     yield options
-
-#                    ticker = f"{ticker}"
-#                    expire = f"{expire.strftime('%Y%m%d')}"
-#                    quantity = f"{len(options)}"
-#                    string = f"AverageCarry[{ticker}, {expire}, {quantity}]"
-
             except ForwardSampleError:
                 forwards = self.tertiary(**constants, **kwargs)
                 options = options.assign(**forwards)
+                self.console(contents, title="SingleCarry")
                 yield options
-
-#                ticker = f"{ticker}"
-#                expire = f"{expire.strftime('%Y%m%d')}"
-#                quantity = f"{len(options)}"
-#                string = f"SingleCarry[{ticker}, {expire}, {quantity}]"
 
     def primary(self, samples, weights, /, **kwargs):
         difference = samples["difference"].to_numpy()
@@ -112,14 +102,14 @@ class ForwardCalculator(Logging):
     @staticmethod
     def samples(options, /, **kwargs):
         samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="right", values=["market", "gap", "supply", "demand"], sort=False).sort_index()
-        if set(Right) - set(samples.columns.get_level_values("right")): raise ForwardSampleError()
-        validity = [samples[index].notna() for index in list(iterprod(["market", "gap"], list(Right)))]
+        if set(Enumerations.Right) - set(samples.columns.get_level_values("right")): raise ForwardSampleError()
+        validity = [samples[index].notna() for index in list(iterprod(["market", "gap"], list(Enumerations.Right)))]
         samples = samples[np.logical_and.reduce(validity)]
-        difference = (samples["market", Right.CALL] - samples["market", Right.PUT]).rename("difference")
-        supply = (samples["supply", Right.CALL] + samples["supply", Right.PUT]).rename("supply")
-        demand = (samples["demand", Right.CALL] + samples["demand", Right.PUT]).rename("demand")
-        market = (samples["market", Right.CALL] + samples["market", Right.PUT]).rename("market")
-        gap = (samples["gap", Right.CALL] + samples["gap", Right.PUT]).rename("gap")
+        difference = (samples["market", Enumerations.Right.CALL] - samples["market", Enumerations.Right.PUT]).rename("difference")
+        supply = (samples["supply", Enumerations.Right.CALL] + samples["supply", Enumerations.Right.PUT]).rename("supply")
+        demand = (samples["demand", Enumerations.Right.CALL] + samples["demand", Enumerations.Right.PUT]).rename("demand")
+        market = (samples["market", Enumerations.Right.CALL] + samples["market", Enumerations.Right.PUT]).rename("market")
+        gap = (samples["gap", Enumerations.Right.CALL] + samples["gap", Enumerations.Right.PUT]).rename("gap")
         strike = samples.index.get_level_values("strike").to_series(index=samples.index)
         samples = pd.concat([strike, difference, market, gap, supply, demand], axis=1)
         samples = samples.reset_index(drop=True, inplace=False)

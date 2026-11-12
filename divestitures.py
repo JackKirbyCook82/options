@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 from options.targets import Target, Calculator
-from finance.enumerations import Intent, Action
+from finance.enumerations import Enumerations
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -51,14 +51,14 @@ class Divestiture(Target, columns="entry"):
     @cached_property
     def fees(self): return self.costing.commissions * self.quantities.sum()
     @cached_property
-    def intent(self): return Intent.CLOSE
+    def intent(self): return Enumerations.Intent.CLOSE
 
     @cached_property
     def liquidate(self):
         positions = self.positions.map(int).astype(int)
         quantities = self.quantities.astype(float)
         actions = positions * int(self.intent)
-        mask = actions.eq(int(Action.BUY))
+        mask = actions.eq(int(Enumerations.Action.BUY))
         prices = self.securities["ask"].where(mask, self.securities["bid"])
         return abs((prices * positions * quantities).sum() - self.market)
 

@@ -18,9 +18,10 @@ from functools import cached_property
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 
-from finance.enumerations import Spread, Action
+from finance.console import LoggingDecorator, LoggingSizing
+from finance.variables import Categories, Quantities
+from finance.enumerations import Enumerations
 from options.prospects import Prospect
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -110,7 +111,7 @@ class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightnes
     @cached_property
     def purpose(self): return [SimpleNamespace(action=action, intent=self.intent) for action in self.actions]
     @cached_property
-    def actions(self): return self.positions.apply(lambda position: Action(int(self.intent) * int(position)))
+    def actions(self): return self.positions.apply(lambda position: Enumerations.Action(int(self.intent) * int(position)))
 
     @cached_property
     def greeks(self): return Greeks(delta=self.delta, gamma=self.gamma, theta=self.theta, vega=self.vega)
@@ -119,8 +120,8 @@ class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightnes
 
     @cached_property
     def zspread(self):
-        if self.spread is Spread.CALENDAR: zspread = self.zscore / (self.quantities.sum() / 2)
-        elif self.spread is Spread.FLY: zspread = self.zscore / (self.quantities.sum() / 2)
+        if self.spread is Enumerations.Spread.CALENDAR: zspread = self.zscore / (self.quantities.sum() / 2)
+        elif self.spread is Enumerations.Spread.FLY: zspread = self.zscore / (self.quantities.sum() / 2)
         else: raise ValueError(self.spread)
         return abs(zspread) * self.factor
 
@@ -170,7 +171,7 @@ class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightnes
     def costing(self): return self.__costing
 
 
-class Calculator(Logging, ABC):
+class Calculator(ABC):
     def __init_subclass__(cls, /, target, **kwargs):
         super().__init_subclass__()
         cls.__target__ = target
@@ -183,6 +184,7 @@ class Calculator(Logging, ABC):
         self.__priority = priority
         self.__metrics = metrics
 
+    @LoggingDecorator(catagories=[Categories.Ticker, Categories.Expire], quantities=[Quantities.ZSpread, Quantities.Multiple, Quantities.Ratio], sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
     def __call__(self, prospects, **kwargs):
         if prospects is None: return None
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])
@@ -192,9 +194,6 @@ class Calculator(Logging, ABC):
         targets = [target for target in targets if self.metrics(target)]
         targets.sort(key=self.priority, reverse=True)
         return targets
-
-#        quantity = f"{len(prospects):.0f}->{len(targets):.0f}"
-#        string = f"Calculated[{tickers}, {expires}, {quantity}]"
 
     def calculate(self, prospects, /, **kwargs):
         parameters = dict(costing=self.costing, scenarios=self.scenarios, halflife=self.halflife)

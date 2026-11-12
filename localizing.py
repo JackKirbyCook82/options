@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 
-from finance.querys import Contract
-from finance.variables import OSI
+from finance.console import LoggingDecorator, LoggingSizing
+from finance.variables import OSI, Categories
+from finance.querys import Querys
 from support.custom import NumberRange
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -80,7 +80,7 @@ class Localizing:
         return instance
 
 
-class LocalizingCalculator(Logging, ABC):
+class LocalizingCalculator(ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
@@ -134,7 +134,7 @@ class LocalizingCalculator(Logging, ABC):
     @staticmethod
     def contained(proposed, proximity):
         try: proposed, proximity = proposed["osi"], proximity["osi"]
-        except KeyError: proposed, proximity = proposed[list(Contract)].apply(OSI), proximity[list(Contract)].apply(OSI)
+        except KeyError: proposed, proximity = proposed[list(Querys.Contract)].apply(OSI), proximity[list(Querys.Contract)].apply(OSI)
         available = set(proposed["osi"].dropna())
         required = set(proximity["osi"].dropna())
         return required.issubset(available)
@@ -176,6 +176,7 @@ class LocalizingCalculator(Logging, ABC):
 
 
 class PartitionCalculator(LocalizingCalculator):
+    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
     def __call__(self, options, /, **kwargs):
         if options is None: return
         assert isinstance(options, pd.DataFrame)
@@ -183,9 +184,6 @@ class PartitionCalculator(LocalizingCalculator):
         options = self.cleaner(options)
         for partition in self.calculator(options, **kwargs):
             yield partition
-
-#            quantity = f"{len(options):.0f}->{len(partition):.0f}"
-#            string = f"Partitioned[{tickers}, {expires}, {quantity}]"
 
     def calculator(self, options, **kwargs):
         history = list()
@@ -207,6 +205,7 @@ class PartitionCalculator(LocalizingCalculator):
 
 
 class ProximityCalculator(LocalizingCalculator):
+    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Proximity")
     def __call__(self, options, proximity, **kwargs):
         if options is None or proximity is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -216,9 +215,6 @@ class ProximityCalculator(LocalizingCalculator):
         if options.empty: return None
         proximity = self.calculator(options, proximity, **kwargs)
         return proximity
-
-#        quantity = f"{len(options):.0f}->{len(proximity):.0f}"
-#        string = f"Proximity[{tickers}, {expires}, {quantity}]"
 
     def calculator(self, options, proximity, **kwargs):
         for local in self.generator(options, proximity, **kwargs):

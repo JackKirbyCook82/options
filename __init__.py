@@ -12,9 +12,10 @@ import pandas as pd
 from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
+from finance.console import LoggingDecorator, LoggingSizing
+from finance.variables import Categories, Quantities
 from support.equations import DataframeEquation
 from support.custom import NumberRange
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -39,7 +40,7 @@ class Metrics(Measure):
         assert self.activity is not None and self.activity > 0
 
 
-class OptionCalculator(DataframeEquation, Logging, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
+class OptionCalculator(DataframeEquation, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
     trading = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending)))
     business = lambda expire, today: np.busday_count(np.datetime64(today) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
     calender = lambda expire, today: (pd.to_datetime(expire) - pd.Timestamp(today)).dt.days
@@ -50,6 +51,7 @@ class OptionCalculator(DataframeEquation, Logging, variables=["moneyness", "tigh
     market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
+    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], title="Calculated")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -59,7 +61,7 @@ class OptionCalculator(DataframeEquation, Logging, variables=["moneyness", "tigh
         return options
 
 
-class SanityFilter(DataframeEquation, Logging, defaults={"size": 1}):
+class SanityFilter(DataframeEquation, defaults={"size": 1}):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
     supplied = lambda supply, *, size: supply.notna() & (supply >= size)
     demanded = lambda demand, *, size: demand.notna() & (demand >= size)
@@ -67,6 +69,7 @@ class SanityFilter(DataframeEquation, Logging, defaults={"size": 1}):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
+    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -78,11 +81,12 @@ class SanityFilter(DataframeEquation, Logging, defaults={"size": 1}):
 
 
 class ViabilityMetrics(Metrics): pass
-class ViabilityFilter(Logging):
+class ViabilityFilter(object):
     def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
         self.__metrics = metrics
 
+    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], quantities=[Quantities.Moneyness, Quantities.Tightness, Quantities.Activity], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -91,9 +95,6 @@ class ViabilityFilter(Logging):
         filtered = options.where(viability).dropna(how="all", inplace=False)
         if filtered.empty: return None
         return filtered
-
-#        quantity = f"{len(options):.0f}->{len(filtered):.0f}"
-#        string = f"Filtered[{tickers}, {expires}, {quantity}]"
 
     def execute(self, options, **kwargs):
         moneyness = options["moneyness"].abs() <= self.metrics.moneyness

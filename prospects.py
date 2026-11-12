@@ -11,11 +11,11 @@ import pandas as pd
 from dataclasses import dataclass
 from abc import ABC, ABCMeta, abstractmethod
 
-from finance.enumerations import Spread, Instrument, Position, Right
-from finance.variables import OSI
+from finance.console import LoggingDecorator, LoggingSizing
+from finance.enumerations import Enumerations
+from finance.variables import OSI, Categories
 from support.meta import RegistryMeta
 from support.custom import DateRange
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -26,7 +26,7 @@ __license__ = "MIT License"
 
 @dataclass(frozen=True, slots=True)
 class Security:
-    instrument: Instrument; right: Right; position: Position
+    instrument: Enumerations.Instrument; right: Enumerations.Right; position: Enumerations.Position
 
     @property
     def key(self): return self.instrument, self.right, self.position
@@ -54,7 +54,7 @@ class ProspectMeta(ABCMeta):
         cls.columns = existing + updated
 
     def __call__(cls, spread, securities, *args, **kwargs):
-        assert spread in list(Spread)
+        assert spread in list(Enumerations.Spread)
         assert isinstance(securities, pd.DataFrame)
         for column in cls.columns:
             if securities[column].isna().any(): raise ProspectColumnError()
@@ -64,7 +64,7 @@ class ProspectMeta(ABCMeta):
 
 class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying volatility quantity position"):
     def __new__(cls, spread, securities, *args, **kwargs):
-        assert spread in list(Spread)
+        assert spread in list(Enumerations.Spread)
         assert isinstance(securities, pd.DataFrame)
         if not len(securities["ticker"].unique()) == 1: raise ProspectTickerError()
         if not len(securities["underlying"].unique()) == 1: raise ProspectUnderlyingError()
@@ -119,9 +119,9 @@ class ProspectCreator(ABC, metaclass=RegistryMeta):
 
     @staticmethod
     def securities(options):
-        for position in iter(Position):
-            for right in iter(Right):
-                security = Security(Instrument.OPTION, right, position)
+        for position in iter(Enumerations.Position):
+            for right in iter(Enumerations.Right):
+                security = Security(Enumerations.Instrument.OPTION, right, position)
                 dataframe = options[options["right"].eq(right)]
                 yield security, dataframe
 
@@ -136,7 +136,7 @@ class ProspectCreator(ABC, metaclass=RegistryMeta):
     def create(security, securities): pass
 
 
-class FlyProspectCreator(ProspectCreator, register=Spread.FLY):
+class FlyProspectCreator(ProspectCreator, register=Enumerations.Spread.FLY):
     @staticmethod
     def organize(securities):
         for security, dataframes in securities:
@@ -152,15 +152,15 @@ class FlyProspectCreator(ProspectCreator, register=Spread.FLY):
 
     @staticmethod
     def create(security, securities):
-        body, wing = security.position, Position(-int(security.position))
-        securities["spread"] = Spread.FLY
+        body, wing = security.position, Enumerations.Position(-int(security.position))
+        securities["spread"] = Enumerations.Spread.FLY
         securities["position"] = [wing, body, wing]
         securities["quantity"] = [1, 2, 1]
-        prospect = Prospect(Spread.FLY, securities)
+        prospect = Prospect(Enumerations.Spread.FLY, securities)
         return prospect
 
 
-class CalendarProspectCreator(ProspectCreator, register=Spread.CALENDAR):
+class CalendarProspectCreator(ProspectCreator, register=Enumerations.Spread.CALENDAR):
     @staticmethod
     def organize(securities):
         for security, dataframes in securities:
@@ -176,15 +176,16 @@ class CalendarProspectCreator(ProspectCreator, register=Spread.CALENDAR):
 
     @staticmethod
     def create(security, securities):
-        far, near = security.position, Position(-int(security.position))
-        securities["spread"] = Spread.CALENDAR
+        far, near = security.position, Enumerations.Position(-int(security.position))
+        securities["spread"] = Enumerations.Spread.CALENDAR
         securities["position"] = [near, far]
         securities["quantity"] = [1, 1]
-        prospect = Prospect(Spread.CALENDAR, securities)
+        prospect = Prospect(Enumerations.Spread.CALENDAR, securities)
         return prospect
 
 
-class ProspectPortfolioCalculator(Logging):
+class ProspectPortfolioCalculator(object):
+    @LoggingDecorator(categories=[Categories.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, holdings, /, **kwargs):
         if holdings is None: return None
         assert isinstance(holdings, pd.DataFrame)
@@ -200,12 +201,13 @@ class ProspectPortfolioCalculator(Logging):
             yield Prospect(spread, securities)
 
 
-class ProspectMarketCalculator(Logging):
+class ProspectMarketCalculator(object):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
         self.__limit = int(limit)
 
+    @LoggingDecorator(categories=[Categories.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
