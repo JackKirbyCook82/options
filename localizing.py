@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 
-from finance.console import LoggingDecorator, LoggingSizing
-from finance.variables import OSI, Categories
+from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
+from finance.variables import OSI, Collections
 from finance.querys import Querys
 from support.custom import NumberRange
 
@@ -80,7 +80,7 @@ class Localizing:
         return instance
 
 
-class LocalizingCalculator(ABC):
+class LocalizingCalculator(LoggingMixin, ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
@@ -176,7 +176,7 @@ class LocalizingCalculator(ABC):
 
 
 class PartitionCalculator(LocalizingCalculator):
-    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
     def __call__(self, options, /, **kwargs):
         if options is None: return
         assert isinstance(options, pd.DataFrame)
@@ -205,7 +205,7 @@ class PartitionCalculator(LocalizingCalculator):
 
 
 class ProximityCalculator(LocalizingCalculator):
-    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Proximity")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, sizing=LoggingSizing.BOTH, percentage=True, title="Proximity")
     def __call__(self, options, proximity, **kwargs):
         if options is None or proximity is None: return None
         assert isinstance(options, pd.DataFrame)

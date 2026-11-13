@@ -18,9 +18,9 @@ from functools import cached_property
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 
-from finance.console import LoggingDecorator, LoggingSizing
-from finance.variables import Categories, Quantities
+from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
 from finance.enumerations import Enumerations
+from finance.variables import Collections
 from options.prospects import Prospect
 
 __version__ = "1.0.0"
@@ -171,7 +171,7 @@ class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightnes
     def costing(self): return self.__costing
 
 
-class Calculator(ABC):
+class Calculator(LoggingMixin, ABC):
     def __init_subclass__(cls, /, target, **kwargs):
         super().__init_subclass__()
         cls.__target__ = target
@@ -184,7 +184,7 @@ class Calculator(ABC):
         self.__priority = priority
         self.__metrics = metrics
 
-    @LoggingDecorator(catagories=[Categories.Ticker, Categories.Expire], quantities=[Quantities.ZSpread, Quantities.Multiple, Quantities.Ratio], sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
     def __call__(self, prospects, **kwargs):
         if prospects is None: return None
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])

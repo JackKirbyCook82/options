@@ -11,9 +11,9 @@ import pandas as pd
 from dataclasses import dataclass
 from abc import ABC, ABCMeta, abstractmethod
 
-from finance.console import LoggingDecorator, LoggingSizing
+from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
 from finance.enumerations import Enumerations
-from finance.variables import OSI, Categories
+from finance.variables import OSI, Collections
 from support.meta import RegistryMeta
 from support.custom import DateRange
 
@@ -184,8 +184,8 @@ class CalendarProspectCreator(ProspectCreator, register=Enumerations.Spread.CALE
         return prospect
 
 
-class ProspectPortfolioCalculator(object):
-    @LoggingDecorator(categories=[Categories.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
+class ProspectPortfolioCalculator(LoggingMixin):
+    @LoggingDecorator(Collections.Tickers, sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, holdings, /, **kwargs):
         if holdings is None: return None
         assert isinstance(holdings, pd.DataFrame)
@@ -201,13 +201,13 @@ class ProspectPortfolioCalculator(object):
             yield Prospect(spread, securities)
 
 
-class ProspectMarketCalculator(object):
+class ProspectMarketCalculator(LoggingMixin):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
         self.__limit = int(limit)
 
-    @LoggingDecorator(categories=[Categories.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
+    @LoggingDecorator(Collections.Tickers, sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

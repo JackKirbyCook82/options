@@ -12,8 +12,8 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.variables import Categories
-from finance.console import LoggingDecorator
+from finance.console import LoggingDecorator, LoggingMixin
+from finance.variables import Collections
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -141,7 +141,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekError(Exception): pass
-class GreekCalculator(object):
+class GreekCalculator(LoggingMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         calculated = ["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"]
@@ -150,7 +150,7 @@ class GreekCalculator(object):
         self.__calculated = calculated
         self.__requesting = requesting
 
-    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], title="Calculated")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

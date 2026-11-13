@@ -13,8 +13,8 @@ from scipy.spatial import cKDTree
 from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
-from finance.console import LoggingDecorator, LoggingSizing
-from finance.variables import Categories
+from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
+from finance.variables import Collections
 from support.equations import DataframeEquation
 
 __version__ = "1.0.0"
@@ -61,12 +61,12 @@ class Neighborhood:
         return scale + 1e-12
 
 
-class VarianceCalculator(DataframeEquation):
+class VarianceCalculator(DataframeEquation, LoggingMixin):
     tau = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending))) / 252
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
-    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], title="Calculated")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -77,7 +77,7 @@ class VarianceCalculator(DataframeEquation):
 
 
 class VarianceError(Exception): pass
-class VarianceScreener(object):
+class VarianceScreener(LoggingMixin):
     def __init__(self, *args, neighbors=25, quantile=0.95, multiple=2.5, **kwargs):
         assert (0.0 < quantile < 1.0) and (multiple > 1.0)
         super().__init__(*args, **kwargs)
@@ -85,7 +85,7 @@ class VarianceScreener(object):
         self.__quantile = float(quantile)
         self.__multiple = float(multiple)
 
-    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -120,12 +120,12 @@ class VarianceScreener(object):
     def multiple(self): return self.__multiple
 
 
-class VarianceStandardizer(object):
+class VarianceStandardizer(LoggingMixin):
     def __init__(self, *args, neighbors, **kwargs):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
 
-    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], title="Standardized")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Standardized")
     def __call__(self, options, surface, /, **kwargs):
         if options is None or surface is None: return None
         assert isinstance(options, pd.DataFrame)

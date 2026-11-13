@@ -10,12 +10,11 @@ Created on Tues Mar 24 2026
 import inspect
 import numpy as np
 import pandas as pd
-from types import SimpleNamespace
 from itertools import product as iterprod
 
 from finance.console import LoggingDecorator, LoggingMixin
-from finance.variables import Categories
 from finance.enumerations import Enumerations
+from finance.variables import Collections
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -28,13 +27,13 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(LoggingMixin, categories=[Categories.Ticker, Categories.Expire]):
+class ForwardCalculator(LoggingMixin):
     def __init__(self, *args, tightness=0.15, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
         self.__tightness = float(tightness)
 
-    @LoggingDecorator(categories=[Categories.Ticker, Categories.Expire], title="Calculated")
+    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -49,7 +48,6 @@ class ForwardCalculator(LoggingMixin, categories=[Categories.Ticker, Categories.
     def calculator(self, options, /, **kwargs):
         assert isinstance(options, pd.DataFrame)
         for (ticker, expire), options in options.groupby(["ticker", "expire"], sort=False, dropna=False):
-            contents = [SimpleNamespace(ticker=ticker, expire=expire)]
             underlying = options["underlying"].dropna(inplace=False).to_numpy()
             try: tau = options["tau"].dropna(inplace=False).to_numpy()
             except KeyError:
@@ -65,17 +63,17 @@ class ForwardCalculator(LoggingMixin, categories=[Categories.Ticker, Categories.
                 if len(samples) >= self.samplesize:
                     forwards = self.primary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    self.console(contents, title="Regression")
+                    self.console(f"{ticker}, {expire.strftime('%Y/%m/%d')}", title="Regression")
                     yield options
                 else:
                     forwards = self.secondary(samples, weights, **constants, **kwargs)
                     options = options.assign(**forwards)
-                    self.console(contents, title="AverageCarray")
+                    self.console(f"{ticker}, {expire.strftime('%Y/%m/%d')}", title="AverageCarray")
                     yield options
             except ForwardSampleError:
                 forwards = self.tertiary(**constants, **kwargs)
                 options = options.assign(**forwards)
-                self.console(contents, title="SingleCarry")
+                self.console(f"{ticker}, {expire.strftime('%Y/%m/%d')}", title="SingleCarry")
                 yield options
 
     def primary(self, samples, weights, /, **kwargs):

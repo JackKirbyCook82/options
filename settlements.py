@@ -15,7 +15,6 @@ from datetime import timedelta as Timedelta
 from collections import OrderedDict as ODict
 
 from finance.console import LoggingMixin
-from finance.variables import Categories
 from support.equations import Equation
 from support.custom import NumberRange
 
@@ -56,7 +55,7 @@ class Settlements:
         return strikes is not None and strike in strikes
 
 
-class SettlementCalculator(Equation, LoggingMixin, variables=["strike"], categories=[Categories.Settlement]):
+class SettlementCalculator(Equation, LoggingMixin, variables=["strike"]):
     tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
     forward = lambda underlying, expire, today, tau, interest, dividends: underlying * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
@@ -81,7 +80,7 @@ class SettlementCalculator(Equation, LoggingMixin, variables=["strike"], categor
             maximum = self.evaluate(expire=expire, today=self.today, zscore=+self.zscore, **parameters)["strike"]
             strikes = NumberRange([minimum, maximum])
             settlement = Settlement(expire, strikes)
-            self.console([settlement], title="Calculated")
+            self.console(f"{expire.strftime('%Y/%m/%d')}, {strikes.minimum:.2f}->{strikes.maximum:.2f}", title="Calculated")
             yield settlement
 
     @property
