@@ -33,7 +33,7 @@ class ForwardCalculator(LoggingMixin):
         self.__samplesize = int(samplesize)
         self.__tightness = float(tightness)
 
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

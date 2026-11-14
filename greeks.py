@@ -150,7 +150,7 @@ class GreekCalculator(LoggingMixin):
         self.__calculated = calculated
         self.__requesting = requesting
 
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

@@ -184,7 +184,7 @@ class Calculator(LoggingMixin, ABC):
         self.__priority = priority
         self.__metrics = metrics
 
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
     def __call__(self, prospects, **kwargs):
         if prospects is None: return None
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])

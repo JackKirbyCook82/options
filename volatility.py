@@ -175,7 +175,7 @@ class ImpliedVolatilityCalculator(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
     def __call__(self, options, /, interest, dividends, price, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

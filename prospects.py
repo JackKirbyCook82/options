@@ -207,7 +207,7 @@ class ProspectMarketCalculator(LoggingMixin):
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
         self.__limit = int(limit)
 
-    @LoggingDecorator(Collections.Tickers, sizings=LoggingSizing.OUTLET, title="Calculated")
+    @LoggingDecorator(Collections.Ticker, sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

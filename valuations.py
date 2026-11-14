@@ -67,7 +67,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class ValuationCalculator(LoggingMixin):
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, valuation, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

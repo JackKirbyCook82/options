@@ -66,7 +66,7 @@ class VarianceCalculator(DataframeEquation, LoggingMixin):
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Calculated")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -85,7 +85,7 @@ class VarianceScreener(LoggingMixin):
         self.__quantile = float(quantile)
         self.__multiple = float(multiple)
 
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -125,7 +125,7 @@ class VarianceStandardizer(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
 
-    @LoggingDecorator(Collections.Tickers, Collections.Expires, title="Standardized")
+    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Standardized")
     def __call__(self, options, surface, /, **kwargs):
         if options is None or surface is None: return None
         assert isinstance(options, pd.DataFrame)
