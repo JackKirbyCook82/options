@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from abc import ABC, ABCMeta, abstractmethod
 
 from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
-from finance.variables import OSI, Collections, Variables
+from finance.variables import OSI, Collection, Variables
 from finance.enumerations import Enumerations
 from support.meta import RegistryMeta
 from support.custom import DateRange
@@ -185,7 +185,7 @@ class CalendarProspectCreator(ProspectCreator, register=Enumerations.Spread.CALE
 
 
 class ProspectPortfolioCalculator(LoggingMixin):
-    @LoggingDecorator(Collections[Variables.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
+    @LoggingDecorator(Collection[Variables.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, holdings, /, **kwargs):
         if holdings is None: return None
         assert isinstance(holdings, pd.DataFrame)
@@ -207,7 +207,7 @@ class ProspectMarketCalculator(LoggingMixin):
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
         self.__limit = int(limit)
 
-    @LoggingDecorator(Collections[Variables.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
+    @LoggingDecorator(Collection[Variables.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

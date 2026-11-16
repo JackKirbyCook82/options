@@ -12,7 +12,7 @@ import pandas as pd
 import pandas_market_calendars as calenders
 
 from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
-from finance.variables import Collections, Metrics, Variables
+from finance.variables import Collection, Metrics, Variables
 from support.equations import DataframeEquation
 
 __version__ = "1.0.0"
@@ -36,7 +36,7 @@ class OptionCalculator(DataframeEquation, LoggingMixin, variables=["moneyness", 
     market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
-    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], title="Calculated")
+    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -54,7 +54,7 @@ class SanityFilter(DataframeEquation, LoggingMixin, defaults={"size": 1}):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
-    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
+    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -71,11 +71,14 @@ class ViabilityFilter(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__metrics = metrics
 
-    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
+    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
         if options.empty: return None
+        measures = self.metrics(options)
+        strings = list(map(str, measures))
+        self.console(*strings, title="Filtered")
         viability = self.execute(options, **kwargs)
         filtered = options.where(viability).dropna(how="all", inplace=False)
         if filtered.empty: return None
