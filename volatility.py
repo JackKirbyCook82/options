@@ -13,7 +13,7 @@ import pandas as pd
 from numba import njit
 
 from finance.console import LoggingDecorator, LoggingMixin
-from finance.variables import Collections
+from finance.variables import Collections, Variables
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -175,7 +175,7 @@ class ImpliedVolatilityCalculator(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, price, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

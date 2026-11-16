@@ -12,7 +12,7 @@ import pandas as pd
 import pandas_market_calendars as calenders
 
 from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
-from finance.variables import Collections
+from finance.variables import Collections, Metrics, Variables
 from support.equations import DataframeEquation
 
 __version__ = "1.0.0"
@@ -36,7 +36,7 @@ class OptionCalculator(DataframeEquation, LoggingMixin, variables=["moneyness", 
     market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], title="Calculated")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -54,7 +54,7 @@ class SanityFilter(DataframeEquation, LoggingMixin, defaults={"size": 1}):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -65,27 +65,13 @@ class SanityFilter(DataframeEquation, LoggingMixin, defaults={"size": 1}):
         return filtered
 
 
-# @dataclass
-# class ViabilityMetrics(Metrics):
-#     moneyness: float | Metrics.Moneyness
-#     tightness: float | Metrics.Tightness
-#     activity: float | Metrics.Activity
-#
-#     def __post_init__(self):
-#         assert self.moneyness is not None and self.moneyness > 0
-#         assert self.tightness is not None and self.tightness > 0
-#         assert self.activity is not None and self.activity > 0
-#         self.moneyness = Metrics.Moneyness(self.moneyness)
-#         self.tightness = Metrics.Tightness(self.tightness)
-#         self.activity = Metrics.Activity(self.activity)
-
-
+class ViabilityMetrics(Metrics, variables=[Variables.Moneyness, Variables.Tightness, Variables.Activity]): pass
 class ViabilityFilter(LoggingMixin):
     def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
         self.__metrics = metrics
 
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

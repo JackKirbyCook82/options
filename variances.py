@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
 from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
-from finance.variables import Collections
+from finance.variables import Collections, Variables
 from support.equations import DataframeEquation
 
 __version__ = "1.0.0"
@@ -66,7 +66,7 @@ class VarianceCalculator(DataframeEquation, LoggingMixin):
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Calculated")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -85,7 +85,7 @@ class VarianceScreener(LoggingMixin):
         self.__quantile = float(quantile)
         self.__multiple = float(multiple)
 
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -125,7 +125,7 @@ class VarianceStandardizer(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
 
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, title="Standardized")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], title="Standardized")
     def __call__(self, options, surface, /, **kwargs):
         if options is None or surface is None: return None
         assert isinstance(options, pd.DataFrame)

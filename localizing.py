@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from abc import ABC, abstractmethod
 
 from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
-from finance.variables import OSI, Collections
+from finance.variables import OSI, Collections, Variables
 from finance.querys import Querys
 from support.custom import NumberRange
 
@@ -176,7 +176,7 @@ class LocalizingCalculator(LoggingMixin, ABC):
 
 
 class PartitionCalculator(LocalizingCalculator):
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
+    @LoggingDecorator(CCollections[Variables.Ticker], Collections[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
     def __call__(self, options, /, **kwargs):
         if options is None: return
         assert isinstance(options, pd.DataFrame)
@@ -205,7 +205,7 @@ class PartitionCalculator(LocalizingCalculator):
 
 
 class ProximityCalculator(LocalizingCalculator):
-    @LoggingDecorator(Collections.Ticker, Collections.Expire, sizing=LoggingSizing.BOTH, percentage=True, title="Proximity")
+    @LoggingDecorator(Collections[Variables.Ticker], Collections[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Proximity")
     def __call__(self, options, proximity, **kwargs):
         if options is None or proximity is None: return None
         assert isinstance(options, pd.DataFrame)
