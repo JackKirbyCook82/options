@@ -14,8 +14,8 @@ from numba import njit
 
 from finance.variables import Collection, Variables
 from finance.console import LoggingDecorators
-from support.pipeline import Pipeline
-from support.mixins import Logging
+from support.mixins import LoggingMixin
+from support.pipeline import Pipelines
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -143,7 +143,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekError(Exception): pass
-class GreekCalculator(Pipeline, Logging):
+class GreekCalculator(LoggingMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         calculated = ["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"]
@@ -152,6 +152,7 @@ class GreekCalculator(Pipeline, Logging):
         self.__calculated = calculated
         self.__requesting = requesting
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, **kwargs):
         if options is None: return None

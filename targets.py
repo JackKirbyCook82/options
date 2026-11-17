@@ -22,8 +22,8 @@ from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import Collection, Variables
 from finance.enumerations import Enumerations
 from options.prospects import Prospect
-from support.pipeline import Pipeline
-from support.mixins import Logging
+from support.mixins import LoggingMixin
+from support.pipeline import Pipelines
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -173,7 +173,7 @@ class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightnes
     def costing(self): return self.__costing
 
 
-class Calculator(Pipeline, Logging, ABC):
+class Calculator(LoggingMixin, ABC):
     def __init_subclass__(cls, /, target, **kwargs):
         super().__init_subclass__()
         cls.__target__ = target
@@ -186,6 +186,7 @@ class Calculator(Pipeline, Logging, ABC):
         self.__priority = priority
         self.__metrics = metrics
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
     def __call__(self, prospects, **kwargs):
         if prospects is None: return None

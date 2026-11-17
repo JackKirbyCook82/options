@@ -17,9 +17,9 @@ from abc import ABC, abstractmethod
 from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import OSI, Collection, Variables
 from finance.querys import Querys
+from support.mixins import LoggingMixin
 from support.custom import NumberRange
-from support.pipeline import Pipeline
-from support.mixins import Logging
+from support.pipeline import Pipelines
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -82,7 +82,7 @@ class Localizing:
         return instance
 
 
-class LocalizingCalculator(Pipeline, Logging, ABC):
+class LocalizingCalculator(LoggingMixin, ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)
@@ -178,6 +178,7 @@ class LocalizingCalculator(Pipeline, Logging, ABC):
 
 
 class PartitionCalculator(LocalizingCalculator):
+    @Pipelines.Generator()
     @LoggingDecorators.Generator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
     def __call__(self, options, /, **kwargs):
         if options is None: return
@@ -207,6 +208,7 @@ class PartitionCalculator(LocalizingCalculator):
 
 
 class ProximityCalculator(LocalizingCalculator):
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Proximity")
     def __call__(self, options, proximity, **kwargs):
         if options is None or proximity is None: return None

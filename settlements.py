@@ -14,10 +14,10 @@ from datetime import date as Date
 from datetime import timedelta as Timedelta
 from collections import OrderedDict as ODict
 
+from support.mixins import LoggingMixin
+from support.pipeline import Pipelines
 from support.equations import Equation
 from support.custom import NumberRange
-from support.pipeline import Pipeline
-from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -56,7 +56,7 @@ class Settlements:
         return strikes is not None and strike in strikes
 
 
-class SettlementCalculator(Equation, Pipeline, Logging, variables=["strike"]):
+class SettlementCalculator(Equation, LoggingMixin, variables=["strike"]):
     tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
     forward = lambda underlying, expire, today, tau, interest, dividends: underlying * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
@@ -66,6 +66,7 @@ class SettlementCalculator(Equation, Pipeline, Logging, variables=["strike"]):
         self.__zscore = zscore
         self.__today = today
 
+    @Pipelines.Function()
     def __call__(self, expires, /, **kwargs):
         if expires is None: return None
         assert isinstance(expires, list) and all([isinstance(expire, Date) for expire in expires])

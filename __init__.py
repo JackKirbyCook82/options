@@ -14,12 +14,12 @@ import pandas_market_calendars as calenders
 from finance.variables import Collection, Metrics, Variables
 from finance.console import LoggingDecorators, LoggingSizing
 from support.equations import DataframeEquation
-from support.pipeline import Pipeline
-from support.mixins import Logging
+from support.mixins import LoggingMixin
+from support.pipeline import Pipelines
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
-__all__ = ["OptionCalculator", "SanityFilter", "ViabilityFilter"]
+__all__ = ["OptionCalculator", "SanityFilter", "ViabilityFilter", "ViabilityMetrics"]
 __copyright__ = "Copyright 2026, Jack Kirby Cook"
 __license__ = "MIT License"
 
@@ -27,7 +27,7 @@ __license__ = "MIT License"
 nyse = calenders.get_calendar("NYSE")
 
 
-class OptionCalculator(DataframeEquation, Pipeline, Logging, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
+class OptionCalculator(DataframeEquation, LoggingMixin, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
     trading = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending)))
     business = lambda expire, today: np.busday_count(np.datetime64(today) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
     calender = lambda expire, today: (pd.to_datetime(expire) - pd.Timestamp(today)).dt.days
@@ -38,6 +38,7 @@ class OptionCalculator(DataframeEquation, Pipeline, Logging, variables=["moneyne
     market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, **kwargs):
         if options is None: return None
@@ -48,7 +49,7 @@ class OptionCalculator(DataframeEquation, Pipeline, Logging, variables=["moneyne
         return options
 
 
-class SanityFilter(DataframeEquation, Logging, defaults={"size": 1}):
+class SanityFilter(DataframeEquation, LoggingMixin, defaults={"size": 1}):
     sanity = lambda supplied, demanded, bided, asked, realistic: np.logical_and.reduce([supplied, demanded, bided, asked, realistic])
     supplied = lambda supply, *, size: supply.notna() & (supply >= size)
     demanded = lambda demand, *, size: demand.notna() & (demand >= size)
@@ -56,6 +57,7 @@ class SanityFilter(DataframeEquation, Logging, defaults={"size": 1}):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
@@ -68,11 +70,12 @@ class SanityFilter(DataframeEquation, Logging, defaults={"size": 1}):
 
 
 class ViabilityMetrics(Metrics, variables=[Variables.Moneyness, Variables.Tightness, Variables.Activity]): pass
-class ViabilityFilter(Logging):
+class ViabilityFilter(LoggingMixin):
     def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
         self.__metrics = metrics
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None

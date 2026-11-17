@@ -16,8 +16,8 @@ import pandas_market_calendars as calenders
 from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import Collection, Variables
 from support.equations import DataframeEquation
-from support.pipeline import Pipeline
-from support.mixins import Logging
+from support.mixins import LoggingMixin
+from support.pipeline import Pipelines
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -63,11 +63,12 @@ class Neighborhood:
         return scale + 1e-12
 
 
-class VarianceCalculator(DataframeEquation, Pipeline, Logging):
+class VarianceCalculator(DataframeEquation, LoggingMixin):
     tau = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending))) / 252
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
@@ -79,7 +80,7 @@ class VarianceCalculator(DataframeEquation, Pipeline, Logging):
 
 
 class VarianceError(Exception): pass
-class VarianceScreener(Pipeline, Logging):
+class VarianceScreener(LoggingMixin):
     def __init__(self, *args, neighbors=25, quantile=0.95, multiple=2.5, **kwargs):
         assert (0.0 < quantile < 1.0) and (multiple > 1.0)
         super().__init__(*args, **kwargs)
@@ -87,6 +88,7 @@ class VarianceScreener(Pipeline, Logging):
         self.__quantile = float(quantile)
         self.__multiple = float(multiple)
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
@@ -122,11 +124,12 @@ class VarianceScreener(Pipeline, Logging):
     def multiple(self): return self.__multiple
 
 
-class VarianceStandardizer(Pipeline, Logging):
+class VarianceStandardizer(LoggingMixin):
     def __init__(self, *args, neighbors, **kwargs):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
 
+    @Pipelines.Function()
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Standardized")
     def __call__(self, options, surface, /, **kwargs):
         if options is None or surface is None: return None
