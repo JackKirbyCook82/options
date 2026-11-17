@@ -176,7 +176,7 @@ class LocalizingCalculator(LoggingMixin, ABC):
 
 
 class PartitionCalculator(LocalizingCalculator):
-    @LoggingDecorator(CCollection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
+#    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
     def __call__(self, options, /, **kwargs):
         if options is None: return
         assert isinstance(options, pd.DataFrame)
