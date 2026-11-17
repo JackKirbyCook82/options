@@ -14,10 +14,12 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from abc import ABC, abstractmethod
 
-from finance.console import LoggingDecorators, LoggingMixin, LoggingSizing
+from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import OSI, Collection, Variables
 from finance.querys import Querys
 from support.custom import NumberRange
+from support.pipeline import Pipeline
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -80,7 +82,7 @@ class Localizing:
         return instance
 
 
-class LocalizingCalculator(LoggingMixin, ABC):
+class LocalizingCalculator(Pipeline, Logging, ABC):
     def __init__(self, *args, localizing, quality=50, overlap=0.80, **kwargs):
         assert isinstance(localizing, Localizing)
         super().__init__(*args, **kwargs)

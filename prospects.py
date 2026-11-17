@@ -11,11 +11,13 @@ import pandas as pd
 from dataclasses import dataclass
 from abc import ABC, ABCMeta, abstractmethod
 
-from finance.console import LoggingDecorators, LoggingMixin, LoggingSizing
+from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import OSI, Collection, Variables
 from finance.enumerations import Enumerations
 from support.meta import RegistryMeta
+from support.pipeline import Pipeline
 from support.custom import DateRange
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -184,7 +186,7 @@ class CalendarProspectCreator(ProspectCreator, register=Enumerations.Spread.CALE
         return prospect
 
 
-class ProspectPortfolioCalculator(LoggingMixin):
+class ProspectPortfolioCalculator(Pipeline, Logging):
     @LoggingDecorators.Function(Collection[Variables.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, holdings, /, **kwargs):
         if holdings is None: return None
@@ -201,7 +203,7 @@ class ProspectPortfolioCalculator(LoggingMixin):
             yield Prospect(spread, securities)
 
 
-class ProspectMarketCalculator(LoggingMixin):
+class ProspectMarketCalculator(Pipeline, Logging):
     def __init__(self, *args, spreads, limit=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]

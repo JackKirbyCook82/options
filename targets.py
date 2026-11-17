@@ -18,10 +18,12 @@ from functools import cached_property
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 
-from finance.console import LoggingDecorators, LoggingMixin, LoggingSizing
+from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import Collection, Variables
 from finance.enumerations import Enumerations
 from options.prospects import Prospect
+from support.pipeline import Pipeline
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -171,7 +173,7 @@ class Target(Prospect, ABC, columns="forecast market zscore bid ask gap tightnes
     def costing(self): return self.__costing
 
 
-class Calculator(LoggingMixin, ABC):
+class Calculator(Pipeline, Logging, ABC):
     def __init_subclass__(cls, /, target, **kwargs):
         super().__init_subclass__()
         cls.__target__ = target

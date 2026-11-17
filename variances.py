@@ -13,9 +13,11 @@ from scipy.spatial import cKDTree
 from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
-from finance.console import LoggingDecorators, LoggingMixin, LoggingSizing
+from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import Collection, Variables
 from support.equations import DataframeEquation
+from support.pipeline import Pipeline
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -61,7 +63,7 @@ class Neighborhood:
         return scale + 1e-12
 
 
-class VarianceCalculator(DataframeEquation, LoggingMixin):
+class VarianceCalculator(DataframeEquation, Pipeline, Logging):
     tau = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending))) / 252
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
@@ -77,7 +79,7 @@ class VarianceCalculator(DataframeEquation, LoggingMixin):
 
 
 class VarianceError(Exception): pass
-class VarianceScreener(LoggingMixin):
+class VarianceScreener(Pipeline, Logging):
     def __init__(self, *args, neighbors=25, quantile=0.95, multiple=2.5, **kwargs):
         assert (0.0 < quantile < 1.0) and (multiple > 1.0)
         super().__init__(*args, **kwargs)
@@ -120,7 +122,7 @@ class VarianceScreener(LoggingMixin):
     def multiple(self): return self.__multiple
 
 
-class VarianceStandardizer(LoggingMixin):
+class VarianceStandardizer(Pipeline, Logging):
     def __init__(self, *args, neighbors, **kwargs):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)

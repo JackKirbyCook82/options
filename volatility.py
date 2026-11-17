@@ -12,8 +12,10 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.console import LoggingDecorator, LoggingMixin
 from finance.variables import Collection, Variables
+from finance.console import LoggingDecorators
+from support.pipeline import Pipeline
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -170,12 +172,12 @@ def calculation(y, x, k, τ, i, r, q, /, low, high, tol, iters):
     return σ
 
 
-class ImpliedVolatilityCalculator(LoggingMixin):
+class ImpliedVolatilityCalculator(Pipeline, Logging):
     def __init__(self, *args, low=1e-4, high=5.0, tol=1e-10, iters=10, **kwargs):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, price, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

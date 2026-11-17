@@ -12,8 +12,10 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.console import LoggingDecorators, LoggingMixin
 from finance.variables import Collection, Variables
+from finance.console import LoggingDecorators
+from support.pipeline import Pipeline
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -141,7 +143,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class GreekError(Exception): pass
-class GreekCalculator(LoggingMixin):
+class GreekCalculator(Pipeline, Logging):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         calculated = ["delta", "gamma", "theta", "rho", "vega", "vomma", "vanna", "charm"]

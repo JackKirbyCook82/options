@@ -12,8 +12,10 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.console import LoggingDecorators, LoggingMixin
 from finance.variables import Collection, Variables
+from finance.console import LoggingDecorators
+from support.pipeline import Pipeline
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -66,7 +68,7 @@ def calculation(x, k, τ, σ, i, r, q):
     return y
 
 
-class ValuationCalculator(LoggingMixin):
+class ValuationCalculator(Pipeline, Logging):
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, valuation, **kwargs):
         if options is None: return None

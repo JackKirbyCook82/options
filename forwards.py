@@ -12,9 +12,11 @@ import numpy as np
 import pandas as pd
 from itertools import product as iterprod
 
-from finance.console import LoggingDecorators, LoggingMixin
 from finance.variables import Collection, Variables
+from finance.console import LoggingDecorators
 from finance.enumerations import Enumerations
+from support.pipeline import Pipeline
+from support.mixins import Logging
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"
@@ -27,7 +29,7 @@ class ForwardError(Exception): pass
 class ForwardSampleError(ForwardError): pass
 
 
-class ForwardCalculator(LoggingMixin):
+class ForwardCalculator(Pipeline, Logging):
     def __init__(self, *args, tightness=0.15, samplesize=5, **kwargs):
         super().__init__(*args, **kwargs)
         self.__samplesize = int(samplesize)
