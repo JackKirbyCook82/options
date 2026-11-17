@@ -13,7 +13,7 @@ from scipy.spatial import cKDTree
 from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
-from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
+from finance.console import LoggingDecorators, LoggingMixin, LoggingSizing
 from finance.variables import Collection, Variables
 from support.equations import DataframeEquation
 
@@ -66,7 +66,7 @@ class VarianceCalculator(DataframeEquation, LoggingMixin):
     mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
     tiv = lambda implied, tau: tau * np.square(implied)
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -85,7 +85,7 @@ class VarianceScreener(LoggingMixin):
         self.__quantile = float(quantile)
         self.__multiple = float(multiple)
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -125,7 +125,7 @@ class VarianceStandardizer(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__neighborhood = Neighborhood(neighbors)
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], title="Standardized")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Standardized")
     def __call__(self, options, surface, /, **kwargs):
         if options is None or surface is None: return None
         assert isinstance(options, pd.DataFrame)

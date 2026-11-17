@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from itertools import product as iterprod
 
-from finance.console import LoggingDecorator, LoggingMixin
+from finance.console import LoggingDecorators, LoggingMixin
 from finance.variables import Collection, Variables
 from finance.enumerations import Enumerations
 
@@ -33,7 +33,7 @@ class ForwardCalculator(LoggingMixin):
         self.__samplesize = int(samplesize)
         self.__tightness = float(tightness)
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

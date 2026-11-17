@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pandas_market_calendars as calenders
 
-from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
+from finance.console import LoggingDecorators, LoggingMixin, LoggingSizing
 from finance.variables import Collection, Metrics, Variables
 from support.equations import DataframeEquation
 
@@ -36,7 +36,7 @@ class OptionCalculator(DataframeEquation, LoggingMixin, variables=["moneyness", 
     market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -54,7 +54,7 @@ class SanityFilter(DataframeEquation, LoggingMixin, defaults={"size": 1}):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
@@ -71,7 +71,7 @@ class ViabilityFilter(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__metrics = metrics
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)

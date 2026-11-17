@@ -18,7 +18,7 @@ from functools import cached_property
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 
-from finance.console import LoggingDecorator, LoggingMixin, LoggingSizing
+from finance.console import LoggingDecorators, LoggingMixin, LoggingSizing
 from finance.variables import Collection, Variables
 from finance.enumerations import Enumerations
 from options.prospects import Prospect
@@ -184,7 +184,7 @@ class Calculator(LoggingMixin, ABC):
         self.__priority = priority
         self.__metrics = metrics
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizings=LoggingSizing.BOTH, percentage=True, title="Targeted")
     def __call__(self, prospects, **kwargs):
         if prospects is None: return None
         assert isinstance(prospects, list) and all([isinstance(prospect, Prospect) for prospect in prospects])

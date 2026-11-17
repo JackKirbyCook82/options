@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
-from finance.console import LoggingDecorator, LoggingMixin
+from finance.console import LoggingDecorators, LoggingMixin
 from finance.variables import Collection, Variables
 
 __version__ = "1.0.0"
@@ -150,7 +150,7 @@ class GreekCalculator(LoggingMixin):
         self.__calculated = calculated
         self.__requesting = requesting
 
-    @LoggingDecorator(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
