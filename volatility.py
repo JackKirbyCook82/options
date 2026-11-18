@@ -177,7 +177,7 @@ class ImpliedVolatilityCalculator(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__hyperparams = dict(low=low, high=high, tol=tol, iters=iters)
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, price, **kwargs):
         if options is None: return None

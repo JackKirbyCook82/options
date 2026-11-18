@@ -69,7 +69,7 @@ def calculation(x, k, τ, σ, i, r, q):
 
 
 class ValuationCalculator(LoggingMixin):
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, valuation, **kwargs):
         if options is None: return None

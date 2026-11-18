@@ -152,7 +152,7 @@ class GreekCalculator(LoggingMixin):
         self.__calculated = calculated
         self.__requesting = requesting
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, interest, dividends, volatility, **kwargs):
         if options is None: return None

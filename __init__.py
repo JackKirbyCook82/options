@@ -38,7 +38,7 @@ class OptionCalculator(DataframeEquation, LoggingMixin, variables=["moneyness", 
     market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, **kwargs):
         if options is None: return None
@@ -57,7 +57,7 @@ class SanityFilter(DataframeEquation, LoggingMixin, defaults={"size": 1}):
     asked = lambda ask: ask.notna() & np.isfinite(ask) & (ask >= 0)
     realistic = lambda bid, ask: ask > bid
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None
@@ -75,7 +75,7 @@ class ViabilityFilter(LoggingMixin):
         super().__init__(*args, **kwargs)
         self.__metrics = metrics
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Filtered")
     def __call__(self, options, **kwargs):
         if options is None: return None

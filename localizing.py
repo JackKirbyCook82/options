@@ -178,7 +178,7 @@ class LocalizingCalculator(LoggingMixin, ABC):
 
 
 class PartitionCalculator(LocalizingCalculator):
-    @Pipelines.Generator()
+    @Pipelines.Generator(locator=0)
     @LoggingDecorators.Generator(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Partitioned")
     def __call__(self, options, /, **kwargs):
         if options is None: return
@@ -208,7 +208,7 @@ class PartitionCalculator(LocalizingCalculator):
 
 
 class ProximityCalculator(LocalizingCalculator):
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Proximity")
     def __call__(self, options, proximity, **kwargs):
         if options is None or proximity is None: return None

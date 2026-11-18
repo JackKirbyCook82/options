@@ -26,7 +26,7 @@ __license__ = "MIT License"
 
 
 class ForwardError(Exception): pass
-class ForwardSampleError(ForwardError): pass
+class SampleError(ForwardError): pass
 
 
 class ForwardCalculator(LoggingMixin):
@@ -35,7 +35,7 @@ class ForwardCalculator(LoggingMixin):
         self.__samplesize = int(samplesize)
         self.__tightness = float(tightness)
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
@@ -73,7 +73,7 @@ class ForwardCalculator(LoggingMixin):
                     options = options.assign(**forwards)
                     self.console(f"{ticker}, {expire.strftime('%Y/%m/%d')}", title="AverageCarray")
                     yield options
-            except ForwardSampleError:
+            except SampleError:
                 forwards = self.tertiary(**constants, **kwargs)
                 options = options.assign(**forwards)
                 self.console(f"{ticker}, {expire.strftime('%Y/%m/%d')}", title="SingleCarry")
@@ -91,7 +91,7 @@ class ForwardCalculator(LoggingMixin):
         discount = np.exp(- interest * tau)
         forwards = (samples["strike"] + samples["difference"] / discount).to_numpy()
         try: forward = np.average(forwards, weights=weights)
-        except ZeroDivisionError: raise ForwardSampleError()
+        except ZeroDivisionError: raise SampleError()
         return dict(forward=forward, discount=discount, error=np.nan)
 
     @staticmethod
@@ -103,7 +103,7 @@ class ForwardCalculator(LoggingMixin):
     @staticmethod
     def samples(options, /, **kwargs):
         samples = options.pivot_table(index=["ticker", "expire", "strike"], columns="right", values=["market", "gap", "supply", "demand"], sort=False).sort_index()
-        if set(Enumerations.Right) - set(samples.columns.get_level_values("right")): raise ForwardSampleError()
+        if set(Enumerations.Right) - set(samples.columns.get_level_values("right")): raise SampleError()
         validity = [samples[index].notna() for index in list(iterprod(["market", "gap"], list(Enumerations.Right)))]
         samples = samples[np.logical_and.reduce(validity)]
         difference = (samples["market", Enumerations.Right.CALL] - samples["market", Enumerations.Right.PUT]).rename("difference")

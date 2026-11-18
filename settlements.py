@@ -66,7 +66,7 @@ class SettlementCalculator(Equation, LoggingMixin, variables=["strike"]):
         self.__zscore = zscore
         self.__today = today
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     def __call__(self, expires, /, **kwargs):
         if expires is None: return None
         assert isinstance(expires, list) and all([isinstance(expire, Date) for expire in expires])

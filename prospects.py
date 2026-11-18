@@ -35,10 +35,10 @@ class Security:
 
 
 class ProspectError(Exception): pass
-class ProspectTickerError(ProspectError): pass
-class ProspectUnderlyingError(ProspectError): pass
-class ProspectVolatilityError(ProspectError): pass
-class ProspectColumnError(ProspectError): pass
+class TickerError(ProspectError): pass
+class UnderlyingError(ProspectError): pass
+class VolatilityError(ProspectError): pass
+class ColumnError(ProspectError): pass
 
 
 class ProspectMeta(ABCMeta):
@@ -59,7 +59,7 @@ class ProspectMeta(ABCMeta):
         assert spread in list(Enumerations.Spread)
         assert isinstance(securities, pd.DataFrame)
         for column in cls.columns:
-            if securities[column].isna().any(): raise ProspectColumnError()
+            if securities[column].isna().any(): raise ColumnError()
         instance = super().__call__(spread, securities, *args, **kwargs)
         return instance
 
@@ -68,9 +68,9 @@ class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying vo
     def __new__(cls, spread, securities, *args, **kwargs):
         assert spread in list(Enumerations.Spread)
         assert isinstance(securities, pd.DataFrame)
-        if not len(securities["ticker"].unique()) == 1: raise ProspectTickerError()
-        if not len(securities["underlying"].unique()) == 1: raise ProspectUnderlyingError()
-        if not len(securities["volatility"].unique()) == 1: raise ProspectVolatilityError()
+        if not len(securities["ticker"].unique()) == 1: raise TickerError()
+        if not len(securities["underlying"].unique()) == 1: raise UnderlyingError()
+        if not len(securities["volatility"].unique()) == 1: raise VolatilityError()
         instance = super().__new__(cls)
         return instance
 
@@ -188,7 +188,7 @@ class CalendarProspectCreator(ProspectCreator, register=Enumerations.Spread.CALE
 
 
 class ProspectPortfolioCalculator(LoggingMixin):
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, holdings, /, **kwargs):
         if holdings is None: return None
@@ -211,7 +211,7 @@ class ProspectMarketCalculator(LoggingMixin):
         self.__creators = [ProspectCreator[spread](*args, **kwargs) for spread in spreads]
         self.__limit = int(limit)
 
-    @Pipelines.Function()
+    @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], sizings=LoggingSizing.OUTLET, title="Calculated")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
