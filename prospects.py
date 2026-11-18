@@ -108,6 +108,7 @@ class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying vo
 
 
 class ProspectCreator(ABC, metaclass=RegistryMeta):
+    def __init_subclass__(cls, **kwargs): pass
     def __call__(self, options, /, limit=1, **kwargs):
         assert isinstance(options, pd.DataFrame)
         securities = self.securities(options)
