@@ -31,7 +31,7 @@ class OptionCalculator(DataframeEquation, LoggingMixin, variables=["moneyness", 
     trading = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending)))
     business = lambda expire, today: np.busday_count(np.datetime64(today) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
     calender = lambda expire, today: (pd.to_datetime(expire) - pd.Timestamp(today)).dt.days
-    moneyness = lambda underlying, strike, right: np.log(underlying / strike.astype(float)) * right.astype(int)
+    moneyness = lambda underlying, strike: np.log(underlying / strike.astype(float))
     activity = lambda supply, demand: np.minimum(supply, demand) / (np.maximum(supply, demand) + 10)
     tightness = lambda gap, market: gap / market
     mean = lambda bid, ask, supply, demand: ((bid * demand) + (ask * supply)) / (demand + supply)

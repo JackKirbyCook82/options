@@ -17,7 +17,7 @@ from collections import OrderedDict as ODict
 from support.mixins import LoggingMixin
 from support.pipeline import Pipelines
 from support.equations import Equation
-from support.custom import NumberRange
+from support.custom import NumberRange, DateRange
 
 __version__ = "1.0.0"
 __author__ = "Jack Kirby Cook"

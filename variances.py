@@ -65,7 +65,7 @@ class Neighborhood:
 
 class VarianceCalculator(DataframeEquation, LoggingMixin):
     tau = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending))) / 252
-    mae = lambda forward, strike, right: np.log(forward / strike.astype(float)) * right.astype(int)
+    mae = lambda forward, strike: np.log(forward / strike.astype(float))
     tiv = lambda implied, tau: tau * np.square(implied)
 
     @Pipelines.Function(locator=0)
