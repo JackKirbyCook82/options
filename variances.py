@@ -13,8 +13,8 @@ from scipy.spatial import cKDTree
 from dataclasses import dataclass
 import pandas_market_calendars as calenders
 
-from finance.console import LoggingDecorators, LoggingSizing
 from finance.variables import Collection, Variables
+from finance.console import LoggingDecorators
 from support.equations import DataframeEquation
 from support.mixins import LoggingMixin
 from support.pipeline import Pipelines
@@ -89,16 +89,27 @@ class VarianceScreener(LoggingMixin):
         self.__multiple = float(multiple)
 
     @Pipelines.Function(locator=0)
-    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], sizing=LoggingSizing.BOTH, percentage=True, title="Screened")
+    @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Screened")
     def __call__(self, options, /, **kwargs):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
         if options.empty: return None
-        mask = options["tau"].notna() & options["mae"].notna() & options["tiv"].notna()
-        options = options[mask].dropna(how="all", inplace=False)
-        if options.empty: return None
-        screened = self.screener(options)
-        if screened.empty: return None
+        screened = options.copy()
+        values = screened[["tau", "mae", "tiv"]].to_numpy(dtype=float)
+        valid = np.isfinite(values).all(axis=1)
+        index = np.flatnonzero(valid)
+        if len(index) == 0: return None
+        rejected = self.screener(screened.iloc[index])
+        column = screened.columns.get_loc("tiv")
+        screened.iloc[~valid, column] = np.nan
+        screened.iloc[index[rejected], column] = np.nan
+        usable = int(np.isfinite(screened["tiv"].to_numpy(dtype=float)).sum())
+        tickers = Collection[Variables.Ticker](options)
+        expires = Collection[Variables.Expire](options)
+        sizes = f"{len(options):.0f}->{int(usable):.0f}"
+        percents = f"{(int(usable) / len(options)) * 100:.0f}%"
+        self.console(tickers, expires, sizes, percents, title="Screened")
+        if not usable: return None
         return screened
 
     def screener(self, options):
@@ -113,8 +124,8 @@ class VarianceScreener(LoggingMixin):
         quantile = np.quantile(population, self.quantile)
         median = np.median(population)
         threshold = max(quantile, self.multiple * median)
-        remove = valid & (ntiv > threshold)
-        return options.iloc[np.flatnonzero(~remove)]
+        rejected = ~valid | (ntiv > threshold)
+        return rejected
 
     @property
     def neighborhood(self): return self.__neighborhood
