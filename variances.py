@@ -94,16 +94,19 @@ class VarianceScreener(LoggingMixin):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
         if options.empty: return None
+
         screened = options.copy()
         values = screened[["tau", "mae", "tiv"]].to_numpy(dtype=float)
         valid = np.isfinite(values).all(axis=1)
         index = np.flatnonzero(valid)
         if len(index) == 0: return None
+
         rejected = self.screener(screened.iloc[index])
         column = screened.columns.get_loc("tiv")
         screened.iloc[~valid, column] = np.nan
         screened.iloc[index[rejected], column] = np.nan
         usable = int(np.isfinite(screened["tiv"].to_numpy(dtype=float)).sum())
+
         tickers = Collection[Variables.Ticker](options)
         expires = Collection[Variables.Expire](options)
         sizes = f"{len(options):.0f}->{int(usable):.0f}"
@@ -120,6 +123,7 @@ class VarianceScreener(LoggingMixin):
         ntiv = np.fromiter(ntiv, dtype=np.float64)
         valid = np.isfinite(ntiv) & (ntiv > 0)
         if not valid.any(): raise VarianceError()
+
         population = ntiv[valid]
         quantile = np.quantile(population, self.quantile)
         median = np.median(population)
