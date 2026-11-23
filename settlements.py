@@ -58,7 +58,7 @@ class Settlements:
 
 class SettlementCalculator(Equation, LoggingMixin, variables=["strike"]):
     tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
-    forward = lambda underlying, expire, today, tau, interest, dividends: underlying * np.exp(np.subtract(interest, dividends) * tau)
+    forward = lambda underlying, tau, interest, dividends: underlying * np.exp(np.subtract(interest, dividends) * tau)
     strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
 
     def __init__(self, *args, today, zscore, **kwargs):

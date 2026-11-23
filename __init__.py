@@ -27,13 +27,16 @@ __license__ = "MIT License"
 nyse = calenders.get_calendar("NYSE")
 
 
-class OptionCalculator(DataframeEquation, LoggingMixin, variables=["moneyness", "tightness", "activity", "market", "gap", "trading", "calender"]):
+class OptionCalculator(DataframeEquation, LoggingMixin, variables=["sigma", "moneyness", "activity", "tightness", "market", "gap", "tau"]):
     trading = lambda expire, today: pd.to_datetime(expire).apply(lambda ending: len(nyse.valid_days(start_date=pd.Timestamp(today) + pd.Timedelta(days=1), end_date=ending)))
     business = lambda expire, today: np.busday_count(np.datetime64(today) + np.timedelta64(1, "D"), pd.to_datetime(expire).values.astype("datetime64[D]") + np.timedelta64(1, "D"))
     calender = lambda expire, today: (pd.to_datetime(expire) - pd.Timestamp(today)).dt.days
+    tau = lambda trading: (trading / 252).where(trading > 0)
+    sigma = lambda forward, strike, tau, volatility: np.abs(np.log(strike / forward)) / (volatility * np.sqrt(tau))
     moneyness = lambda underlying, strike: np.log(underlying / strike.astype(float))
     activity = lambda supply, demand: np.minimum(supply, demand) / (np.maximum(supply, demand) + 10)
     tightness = lambda gap, market: gap / market
+    forward = lambda underlying, tau, dividends, interest: underlying * np.exp((interest - dividends) * tau)
     mean = lambda bid, ask, supply, demand: ((bid * demand) + (ask * supply)) / (demand + supply)
     market = lambda bid, ask: (bid + ask) / 2
     gap = lambda bid, ask: ask - bid
@@ -69,7 +72,7 @@ class SanityFilter(DataframeEquation, LoggingMixin, defaults={"size": 1}):
         return filtered
 
 
-class ViabilityMetrics(Metrics, variables=[Variables.Moneyness, Variables.Tightness, Variables.Activity]): pass
+class ViabilityMetrics(Metrics, variables=[Variables.Sigma, Variables.Tightness, Variables.Activity]): pass
 class ViabilityFilter(LoggingMixin):
     def __init__(self, *args, metrics, **kwargs):
         super().__init__(*args, **kwargs)
@@ -90,10 +93,10 @@ class ViabilityFilter(LoggingMixin):
         return filtered
 
     def execute(self, options, **kwargs):
-        moneyness = options["moneyness"].abs() <= self.metrics.moneyness
+        sigma = np.isfinite(options["sigma"]) & (options["sigma"] <= self.metrics.sigma)
         tightness = options["tightness"] <= self.metrics.tightness
         activity = options["activity"] >= self.metrics.activity
-        viability = moneyness & tightness & activity
+        viability = sigma & tightness & activity
         return viability
 
     @property
