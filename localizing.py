@@ -153,9 +153,10 @@ class LocalizingCalculator(LoggingMixin, ABC):
 
     @staticmethod
     def cleaner(dataframe):
-        mask = dataframe["tau"].notna() & dataframe["mae"].notna()
-        if "tiv" in dataframe.columns: mask &= dataframe["tiv"].notna()
-        return dataframe[mask].copy()
+        columns = ["tau", "mae"]
+        if "tiv" in dataframe.columns: columns.append("tiv")
+        mask = np.isfinite(dataframe[columns].to_numpy(dtype=float)).all(axis=1)
+        return dataframe.loc[mask].copy
 
     @staticmethod
     def alternate(array):

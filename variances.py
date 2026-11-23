@@ -29,22 +29,40 @@ __license__ = "MIT License"
 nyse = calenders.get_calendar("NYSE")
 
 
-@dataclass(frozen=True)
-class Neighborhood:
-    neighbors: int = 25
+class VarianceError(Exception): pass
+class SizeError(VarianceError): pass
+class NumericError(VarianceError): pass
 
-    def __call__(self, t, k, w):
+
+@dataclass(frozen=True)
+class Statistics: center: float; deviation: float; count: int
+
+
+class StatisticsCalculator(LoggingMixin):
+    def __init__(self, *args, neighbors, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__neighbors = int(neighbors)
+
+    def statistics(self, t, k, w):
+        t = np.asarray(t, dtype=float)
+        k = np.asarray(k, dtype=float)
+        w = np.asarray(w, dtype=float)
+        if len(w) < 2: raise SizeError()
+        if len(t) != len(w) or len(k) != len(w): raise SizeError()
+        if not np.isfinite(np.column_stack([t, k, w])).all(): raise NumericError()
         t = self.independent(t)
         k = self.independent(k)
-        w = np.asarray(w, dtype=float)
-        n = min(self.neighbors, len(w))
         tk = np.column_stack([t, k])
         tree = cKDTree(tk)
-        _, ij = tree.query(tk, k=n)
-        if n == 1: ij = ij[:, None]
-        for index in range(len(w)):
-            wij = w[ij[index]]
-            yield self.dependent(wij)
+        n = min(self.neighbors, len(w) - 1)
+        _, indexes = tree.query(tk, k=n + 1)
+        for index, neighbors in enumerate(indexes):
+            neighbors = neighbors[neighbors != index][:n]
+            values = w[neighbors]
+            center = float(np.median(values))
+            deviation = float(1.4826 * np.median(np.abs(values - center)))
+            statistics = Statistics(center=center, deviation=deviation, count=len(values))
+            yield statistics
 
     @staticmethod
     def independent(x):
@@ -52,7 +70,11 @@ class Neighborhood:
         center = np.median(x)
         distance = np.abs(x - center)
         scale = 1.4826 * np.median(distance)
-        return (x - center) / max(scale, 1e-12)
+        if scale <= 1e-12:
+            unique = np.unique(x)
+            if len(unique) > 1: scale = np.median(np.diff(unique))
+            else: scale = 1.0
+        return (x - center) / scale
 
     @staticmethod
     def dependent(y):
@@ -61,6 +83,9 @@ class Neighborhood:
         distance = np.abs(y - center)
         scale = 1.4826 * np.median(distance)
         return scale + 1e-12
+
+    @property
+    def neighbors(self): return self.__neighbors
 
 
 class VarianceCalculator(DataframeEquation, LoggingMixin):
@@ -79,14 +104,11 @@ class VarianceCalculator(DataframeEquation, LoggingMixin):
         return options
 
 
-class VarianceError(Exception): pass
-class VarianceScreener(LoggingMixin):
-    def __init__(self, *args, neighbors=25, quantile=0.95, multiple=2.5, **kwargs):
-        assert (0.0 < quantile < 1.0) and (multiple > 1.0)
+class VarianceScreener(StatisticsCalculator):
+    def __init__(self, *args, threshold=5.0, floor=0.05, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__neighborhood = Neighborhood(neighbors)
-        self.__quantile = float(quantile)
-        self.__multiple = float(multiple)
+        self.__threshold = float(threshold)
+        self.__floor = float(floor)
 
     @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Screened")
@@ -94,79 +116,79 @@ class VarianceScreener(LoggingMixin):
         if options is None: return None
         assert isinstance(options, pd.DataFrame)
         if options.empty: return None
+        screened = self.screener(options, **kwargs)
+        usable = int(np.isfinite(screened["tiv"].to_numpy(dtype=float)).sum())
+        self.console(options, usable)
+        if not usable: return None
+        return screened
 
-        screened = options.copy()
-        values = screened[["tau", "mae", "tiv"]].to_numpy(dtype=float)
-        valid = np.isfinite(values).all(axis=1)
+    def screener(self, options, /, **kwargs):
+        tkw = options[["tau", "mae", "tiv"]].to_numpy(dtype=float)
+        valid = np.isfinite(tkw).all(axis=1)
         index = np.flatnonzero(valid)
         if len(index) == 0: return None
 
-        rejected = self.screener(screened.iloc[index])
+        t = options.iloc[index].to_numpy(dtype=float)
+        k = options.iloc[index].to_numpy(dtype=float)
+        w = options.iloc[index].to_numpy(dtype=float)
+        scores = self.scores(t, k, w)
+        scores = np.fromiter(scores, dtype=np.float64, count=len(w))
+
+        screened = options.copy()
+        rejected = (~np.isfinite(scores) | (np.abs(scores) > self.threshold))
+        screened["outlier"] = np.nan
+        column = screened.columns.get_loc("outlier")
+        screened.iloc[index, column] = scores
+
         column = screened.columns.get_loc("tiv")
         screened.iloc[~valid, column] = np.nan
         screened.iloc[index[rejected], column] = np.nan
-        usable = int(np.isfinite(screened["tiv"].to_numpy(dtype=float)).sum())
+        return screened
 
+    def scores(self, t, k, w):
+        statistics = self.statistics(t, k, w)
+        for value, statistics in zip(w, statistics):
+            scale = max(statistics.deviation, self.floor * abs(statistics.center), 1e-8)
+            yield (value - statistics.center) / scale
+
+    def console(self, options, usable):
         tickers = Collection[Variables.Ticker](options)
         expires = Collection[Variables.Expire](options)
         sizes = f"{len(options):.0f}->{int(usable):.0f}"
         percents = f"{(int(usable) / len(options)) * 100:.0f}%"
-        self.console(tickers, expires, sizes, percents, title="Screened")
-        if not usable: return None
-        return screened
-
-    def screener(self, options):
-        tau = options["tau"].to_numpy(dtype=float)
-        mae = options["mae"].to_numpy(dtype=float)
-        tiv = options["tiv"].to_numpy(dtype=float)
-        ntiv = self.neighborhood(tau, mae, tiv)
-        ntiv = np.fromiter(ntiv, dtype=np.float64)
-        valid = np.isfinite(ntiv) & (ntiv > 0)
-        if not valid.any(): raise VarianceError()
-
-        population = ntiv[valid]
-        quantile = np.quantile(population, self.quantile)
-        median = np.median(population)
-        threshold = max(quantile, self.multiple * median)
-        rejected = ~valid | (ntiv > threshold)
-        return rejected
+        super().console(tickers, expires, sizes, percents, title="Screened")
 
     @property
-    def neighborhood(self): return self.__neighborhood
+    def threshold(self): return self.__threshold
     @property
-    def quantile(self): return self.__quantile
-    @property
-    def multiple(self): return self.__multiple
+    def floor(self): return self.__floor
 
 
-class VarianceStandardizer(LoggingMixin):
-    def __init__(self, *args, neighbors, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__neighborhood = Neighborhood(neighbors)
-
+class VarianceStandardizer(StatisticsCalculator):
     @Pipelines.Function(locator=0)
     @LoggingDecorators.Function(Collection[Variables.Ticker], Collection[Variables.Expire], title="Standardized")
     def __call__(self, options, surface, /, **kwargs):
         if options is None or surface is None: return None
         assert isinstance(options, pd.DataFrame)
         if options.empty: return None
-        tau = options["tau"].to_numpy(dtype=float)
-        mae = options["mae"].to_numpy(dtype=float)
-        tiv = options["tiv"].to_numpy(dtype=float)
-        standard = self.standardize(tau, mae, tiv, surface)
+        standard = self.standardize(options, surface, **kwargs)
         standard = pd.Series(standard, name="zscore", index=options.index)
         options = pd.concat([options, standard], axis=1)
         return options
 
-    def standardize(self, t, k, w, f):
-        μ = np.vectorize(f)(t, k)
-        σ = self.neighborhood(t, k, w)
+    def standardize(self, options, surface, /, **kwargs):
+        t = options["tau"].to_numpy(dtype=float)
+        k = options["mae"].to_numpy(dtype=float)
+        w = options["tiv"].to_numpy(dtype=float)
+        μ = np.vectorize(surface)(t, k)
+        σ = self.deviations(t, k, w)
         σ = np.fromiter(σ, dtype=np.float64)
         ε = np.quantile(σ[σ > 0], 0.1) if np.any(σ > 0) else 1e-8
         z = (w - μ) / np.maximum(σ, ε)
         return z
 
-    @property
-    def neighborhood(self): return self.__neighborhood
+    def deviations(self, t, k, w):
+        for statistics in self.statistics(t, k, w):
+            yield statistics.deviation + 1e-12
 
 
