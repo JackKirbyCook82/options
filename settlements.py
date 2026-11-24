@@ -59,11 +59,11 @@ class Settlements:
 class SettlementCalculator(Equation, LoggingMixin, variables=["strike"]):
     tau = lambda expire, today: len(nyse.valid_days(start_date=today + Timedelta(days=1), end_date=expire)) / 252
     forward = lambda underlying, tau, interest, dividends: underlying * np.exp(np.subtract(interest, dividends) * tau)
-    strike = lambda forward, zscore, tau, volatility: forward * np.exp(zscore * volatility * np.sqrt(tau))
+    strike = lambda forward, stdmoney, tau, volatility: forward * np.exp(stdmoney * volatility * np.sqrt(tau))
 
-    def __init__(self, *args, today, zscore, **kwargs):
+    def __init__(self, *args, today, stdmoney, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__zscore = zscore
+        self.__stdmoney = stdmoney
         self.__today = today
 
     @Pipelines.Function(locator=0)
@@ -78,15 +78,15 @@ class SettlementCalculator(Equation, LoggingMixin, variables=["strike"]):
     def calculator(self, expires, /, underlying, volatility, dividends, interest, **kwargs):
         parameters = dict(underlying=underlying, volatility=volatility, dividends=dividends, interest=interest)
         for expire in expires:
-            minimum = self.evaluate(expire=expire, today=self.today, zscore=-self.zscore, **parameters)["strike"]
-            maximum = self.evaluate(expire=expire, today=self.today, zscore=+self.zscore, **parameters)["strike"]
+            minimum = self.evaluate(expire=expire, today=self.today, stdmoney=-self.stdmoney, **parameters)["strike"]
+            maximum = self.evaluate(expire=expire, today=self.today, stdmoney=+self.stdmoney, **parameters)["strike"]
             strikes = NumberRange([minimum, maximum])
             settlement = Settlement(expire, strikes)
             self.console(f"{expire.strftime('%Y/%m/%d')}, {strikes.minimum:.2f}->{strikes.maximum:.2f}", title="Calculated")
             yield settlement
 
     @property
-    def zscore(self): return self.__zscore
+    def stdmoney(self): return self.__stdmoney
     @property
     def today(self): return self.__today
 
