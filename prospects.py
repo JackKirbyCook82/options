@@ -86,7 +86,7 @@ class Prospect(ABC, metaclass=ProspectMeta, columns="ticker expire underlying vo
     @property
     def osi(self):
         try: return self.securities["osi"]
-        except KeyError: return self.securities[["ticker", "expire", "right", "strike"]].apply(OSI, axis=1)
+        except KeyError: return self.securities[["ticker", "expire", "right", "strike"]].apply(OSI.create, axis=1)
 
     @property
     def positions(self): return self.securities["position"]

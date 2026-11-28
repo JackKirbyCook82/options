@@ -136,7 +136,7 @@ class LocalizingCalculator(LoggingMixin, ABC):
     @staticmethod
     def contained(proposed, proximity):
         try: proposed, proximity = proposed["osi"], proximity["osi"]
-        except KeyError: proposed, proximity = proposed[list(Querys.Contract)].apply(OSI), proximity[list(Querys.Contract)].apply(OSI)
+        except KeyError: proposed, proximity = proposed[list(Querys.Contract)].apply(OSI.create), proximity[list(Querys.Contract)].apply(OSI.create)
         available = set(proposed["osi"].dropna())
         required = set(proximity["osi"].dropna())
         return required.issubset(available)
